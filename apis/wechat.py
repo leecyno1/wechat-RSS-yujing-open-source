@@ -20,8 +20,9 @@ async def get_mp_detail(
 ):
     session = DB.get_session()
     try:
+        from sqlalchemy import text
         mp = session.execute(
-            "SELECT * FROM mps WHERE mp_id = :id",
+            text("SELECT * FROM mps WHERE mp_id = :id"),
             {"id": mp_id}
         ).fetchone()
         if not mp:

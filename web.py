@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from apis.auth import router as auth_router
 from apis.user import router as user_router
 from apis.article import router as article_router
 from apis.wechat import router as wechat_router
+import os
 
 app = FastAPI(
     title="WeRSS API",
@@ -11,11 +14,43 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 集成路由
-app.include_router(auth_router)
-app.include_router(user_router)
-app.include_router(article_router)
-app.include_router(wechat_router)
+# CORS配置
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# 静态文件服务
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# API路由
+app.include_router(auth_router, prefix="/wx")
+app.include_router(user_router, prefix="/wx")
+app.include_router(article_router, prefix="/wx")
+app.include_router(wechat_router, prefix="/wx")
+
+# 静态文件服务配置
+app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/{path:path}")
+async def serve_vue_app(request: Request, path: str):
+    """处理Vue应用路由"""
+    # 排除API和静态文件路由
+    if path.startswith(('wx', 'api', 'assets', 'static')):
+        return None
+    
+    # 返回Vue入口文件
+    index_path = os.path.join("static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    
+    return {"error": "Not Found"}, 404
+
+@app.get("/")
+async def serve_root():
+    """处理根路由"""
+    index_path = os.path.join("static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "index.html not found"}, 404

@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from datetime import datetime
 from core.auth import get_current_user
 from core.db import DB
 from core.models import User as DBUser
 from core.auth import pwd_context
-from .ver import API_VERSION
+import os
 
-router = APIRouter(prefix=f"{API_VERSION}/user", tags=["用户管理"])
+router = APIRouter(prefix="/wx/user", tags=["用户管理"])
 
 @router.get("", summary="获取用户信息")
 async def get_user_info(current_user: dict = Depends(get_current_user)):
@@ -65,3 +65,28 @@ async def update_user_info(
         )
     finally:
         session.close()
+
+@router.post("/avatar", summary="上传用户头像")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """处理用户头像上传"""
+    try:
+        # 确保头像目录存在
+        os.makedirs("static/avatars", exist_ok=True)
+        
+        # 保存文件
+        file_path = f"static/avatars/{current_user['username']}.jpg"
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+        
+        return {
+            "code": 0,
+            "url": f"/avatars/{current_user['username']}.jpg"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"头像上传失败: {str(e)}"
+        )

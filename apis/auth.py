@@ -35,3 +35,11 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
         data={"sub": current_user["username"]}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/verify", summary="验证Token有效性")
+async def verify_token(current_user: dict = Depends(get_current_user)):
+    """验证当前token是否有效"""
+    return {
+        "is_valid": True,
+        "user": current_user["username"]
+    }

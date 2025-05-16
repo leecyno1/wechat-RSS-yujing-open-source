@@ -82,7 +82,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { getUserInfo, updateUserInfo, uploadAvatar } from '@/api/user'
+import { getUserInfo, updateUserInfo } from '@/api/user'
 
 const router = useRouter()
 const loading = ref(false)

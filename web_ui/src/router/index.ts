@@ -1,39 +1,56 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import BasicLayout from '../components/Layout/BasicLayout.vue'
 import Login from '../views/Login.vue'
 import ArticleList from '../views/ArticleList.vue'
 import ChangePassword from '../views/ChangePassword.vue'
 import EditUser from '../views/EditUser.vue'
 import AddSubscription from '../views/AddSubscription.vue'
+import WeChatMpManagement from '../views/WeChatMpManagement.vue'
 
 const routes = [
+  {
+    path: '/',
+    component: BasicLayout,
+    children: [
+      {
+        path: '',
+        name: 'Home',
+        component: ArticleList,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'change-password',
+        name: 'ChangePassword',
+        component: ChangePassword,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'edit-user',
+        name: 'EditUser',
+        component: EditUser,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'add-subscription',
+        name: 'AddSubscription',
+        component: AddSubscription,
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'wechat/mp',
+        name: 'WeChatMpManagement',
+        component: WeChatMpManagement,
+        meta: { 
+          requiresAuth: true,
+          permissions: ['wechat:manage'] 
+        }
+      }
+    ]
+  },
   {
     path: '/login',
     name: 'Login',
     component: Login
-  },
-  {
-    path: '/',
-    name: 'ArticleList',
-    component: ArticleList,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/change-password',
-    name: 'ChangePassword',
-    component: ChangePassword,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/edit-user',
-    name: 'EditUser',
-    component: EditUser,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/add-subscription',
-    name: 'AddSubscription',
-    component: AddSubscription,
-    meta: { requiresAuth: true }
   }
 ]
 
@@ -42,14 +59,39 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
-  const isAuthenticated = localStorage.getItem('token')
+router.beforeEach(async (to, from, next) => {
+  // 不需要认证的路由直接放行
+  if (!to.meta.requiresAuth) {
+    return next()
+  }
+
+  const token = localStorage.getItem('token')
   
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    next('/login')
-  } else {
+  // 未登录则跳转登录页
+  if (!token) {
+    return next({
+      path: '/login',
+      query: { redirect: to.fullPath } // 保存目标路由用于登录后跳转
+    })
+  }
+
+  // 已登录状态，验证token有效性
+  try {
+    // 确保从正确路径导入verifyToken
+    const { verifyToken } = await import('@/api/auth')
+    await verifyToken()
     next()
+  } catch (error) {
+    console.error('Token验证失败:', error)
+    // token无效时清除并跳转登录
+    localStorage.removeItem('token')
+    next({
+      path: '/login',
+      query: { 
+        redirect: to.fullPath,
+        error: 'session_expired'
+      }
+    })
   }
 })
 

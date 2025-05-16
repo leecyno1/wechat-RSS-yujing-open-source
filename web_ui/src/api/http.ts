@@ -23,13 +23,12 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   (response) => {
-    const res = response.data
-    console.log(res.code)
-    if (res.code !=0) {
-      Message.error(res.message || 'Error')
-      return Promise.reject(new Error(res.message || 'Error'))
+    if (response.status !== 200) {
+      Message.error('请求失败')
+      return Promise.reject(new Error('请求失败'))
     }
-    return res.data
+    const res = response.data
+    return res
   },
   (error) => {
     Message.error(error.message || '请求失败')

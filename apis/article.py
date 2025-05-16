@@ -12,8 +12,9 @@ async def get_articles(
 ):
     session = DB.get_session()
     try:
+        from sqlalchemy import text
         articles = session.execute(
-            "SELECT * FROM articles LIMIT :limit OFFSET :offset",
+            text("SELECT * FROM articles LIMIT :limit OFFSET :offset"),
             {"limit": limit, "offset": offset}
         ).fetchall()
         return {"code": 0, "data": articles}

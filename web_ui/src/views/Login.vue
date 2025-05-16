@@ -46,9 +46,26 @@ const form = ref({
 const handleSubmit = async () => {
   loading.value = true
   try {
-    const res = await login(form.value)
-    localStorage.setItem('token', res.access_token)
-    router.push('/')
+    try {
+      const res = await login(form.value)
+      console.log('登录响应:', res)
+      
+      // 存储token
+      localStorage.setItem('token', res.access_token)
+      console.log('Token已存储:', localStorage.getItem('token'))
+      
+      // 检查存储配额
+      console.log('Storage剩余空间:', JSON.stringify(localStorage).length / 1024 + 'KB')
+    } catch (error) {
+      console.error('存储失败:', error)
+      Message.error('登录状态保存失败: ' + error.message)
+    }
+    
+    // 处理登录后重定向
+    const redirect = router.currentRoute.value.query.redirect
+    console.log('重定向目标:', redirect)
+    await router.push(redirect ? redirect.toString() : '/')
+    console.log('跳转完成')
   } catch (error) {
     console.log(error)
     Message.error('登录失败，请检查用户名和密码')

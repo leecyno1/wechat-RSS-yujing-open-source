@@ -2,30 +2,36 @@ import http from './http'
 
 export interface UserInfo {
   username: string
-  nickname: string
-  email: string
-  avatar: string
+  role: string
+  is_active: boolean
+  created_at: string
 }
 
-export interface ChangePasswordParams {
-  old_password: string
-  new_password: string
+export interface UpdateUserParams {
+  password?: string
+  is_active?: boolean
 }
 
 export const getUserInfo = () => {
-  return http.get<UserInfo>('/user/info')
+  return http.get<{code: number, data: UserInfo}>('/wx/user')
 }
 
-export const updateUserInfo = (data: Partial<UserInfo>) => {
-  return http.put('/user/info', data)
+export const updateUserInfo = (data: UpdateUserParams) => {
+  return http.put<{code: number, message: string}>('/wx/user', data)
 }
 
-export const changePassword = (data: ChangePasswordParams) => {
-  return http.put('/user/password', data)
+export const changePassword = (newPassword: string) => {
+  return updateUserInfo({ password: newPassword })
 }
 
-export const uploadAvatar = (file: FormData) => {
-  return http.post<{ url: string }>('/user/avatar', file, {
+export const toggleUserStatus = (active: boolean) => {
+  return updateUserInfo({ is_active: active })
+}
+
+export const uploadAvatar = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return http.post<{code: number, url: string}>('/wx/user/avatar', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
