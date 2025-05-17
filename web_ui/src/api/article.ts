@@ -25,7 +25,17 @@ export interface ArticleListResult {
 }
 
 export const getArticles = (params: ArticleListParams) => {
-  return http.get<ArticleListResult>('/wx/articles', { params })
+  // 转换分页参数
+  const apiParams = {
+    offset: (params.page || 0) * (params.pageSize || 10),
+    limit: params.pageSize || 10,
+    search: params.search,
+    status: params.status,
+    mp_id: params.mp_id
+  }
+  return http.get<ArticleListResult>('/wx/articles', { 
+    params: apiParams 
+  })
 }
 
 export const getArticleDetail = (id: number) => {

@@ -94,12 +94,22 @@ const form = reactive({
 })
 
 const loadData = async () => {
-  const res = await getSubscriptions({
-    page: pagination.current,
-    pageSize: pagination.pageSize
-  })
-  mpList.value = res.data.data
-  pagination.total = res.data.total
+  try {
+    const res = await getSubscriptions({
+      page: pagination.current - 1, // 转换为0-based
+      pageSize: pagination.pageSize
+    })
+    
+    if (res.code === 0) {
+      mpList.value = res.data.list || []
+      pagination.total = res.data.total || 0
+    } else {
+      throw new Error(res.message || '获取公众号列表失败')
+    }
+  } catch (error) {
+    console.error('获取公众号列表错误:', error)
+    Message.error(error.message)
+  }
 }
 
 const showAddModal = () => {

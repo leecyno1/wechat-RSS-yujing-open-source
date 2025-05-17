@@ -1,18 +1,24 @@
 import http from './http'
 
 export interface Subscription {
+  id: string
   mp_id: string
+  name: string
   mp_name: string
   mp_cover: string
   mp_intro: string
   status: number
   sync_time: string
   rss_url: string
+  article_count: number
 }
 
 export interface SubscriptionListResult {
   code: number
-  data: Subscription[]
+  data: {
+    list: Subscription[]
+    total: number
+  }
 }
 
 export interface AddSubscriptionParams {
@@ -22,8 +28,12 @@ export interface AddSubscriptionParams {
   mp_intro?: string
 }
 
-export const getSubscriptions = (params?: { offset?: number; limit?: number }) => {
-  return http.get<SubscriptionListResult>('/wx/mps', { params })
+export const getSubscriptions = (params?: { page?: number; pageSize?: number }) => {
+  const apiParams = {
+    offset: (params?.page || 0) * (params?.pageSize || 10),
+    limit: params?.pageSize || 10
+  }
+  return http.get<SubscriptionListResult>('/wx/mps', { params: apiParams })
 }
 
 export const getSubscriptionDetail = (mp_id: string) => {

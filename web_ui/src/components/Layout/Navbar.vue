@@ -9,19 +9,13 @@
         <template #icon>
           <icon-home />
         </template>
-        首页
+        文章列表
       </a-menu-item>
       <a-menu-item key="/wechat/mp">
         <template #icon>
           <icon-wechat />
         </template>
         公众号管理
-      </a-menu-item>
-      <a-menu-item key="/add-subscription">
-        <template #icon>
-          <icon-plus />
-        </template>
-        添加订阅
       </a-menu-item>
     </a-menu>
   </a-layout-header>

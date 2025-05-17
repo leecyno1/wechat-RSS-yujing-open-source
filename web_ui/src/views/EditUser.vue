@@ -16,15 +16,24 @@
       >
         <a-form-item label="头像">
           <a-upload
-            action="/api/upload"
+            :custom-request="handleUploadChange"
             :file-list="fileList"
-            @change="handleUploadChange"
             :show-file-list="false"
+            accept="image/*"
+            :limit="1"
+            :max-size="2048"
+            @exceed="handleExceed"
+            @error="handleUploadError"
           >
             <template #upload-button>
               <div class="avatar-upload">
                 <a-avatar :size="80">
-                  <img v-if="form.avatar" :src="form.avatar" alt="avatar">
+                  <img 
+                    v-if="form.avatar" 
+                    :src="form.avatar" 
+                    alt="avatar"
+                    @error="handleImageError"
+                  >
                   <icon-user v-else />
                 </a-avatar>
                 <div class="upload-mask">
@@ -82,7 +91,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { getUserInfo, updateUserInfo } from '@/api/user'
+import { getUserInfo, updateUserInfo, uploadAvatar } from '@/api/user'
 
 const router = useRouter()
 const loading = ref(false)
@@ -103,41 +112,95 @@ const rules = {
   ]
 }
 
-const handleUploadChange = async (file: any) => {
+const handleUploadChange = async (options: any) => {
+  const { file } = options
+  
+  // 文件类型验证
+  if (!file.file.type.startsWith('image/')) {
+    Message.error('请选择图片文件 (JPEG/PNG)')
+    return
+  }
+
+  // 文件大小验证 (2MB)
+  if (file.file.size > 2 * 1024 * 1024) {
+    Message.error('图片大小不能超过2MB')
+    return
+  }
+
   try {
+    Message.loading('正在上传头像...')
     const formData = new FormData()
-    formData.append('file', file.file)
+    formData.append('avatar', file.file)
     const res = await uploadAvatar(formData)
-    form.value.avatar = res.url
+    form.value.avatar = res.data.avatar
     Message.success('头像上传成功')
   } catch (error) {
-    Message.error('头像上传失败')
+    console.error('上传错误:', error)
+    Message.error(`上传失败: ${error.response?.data?.message || error.message || '服务器错误'}`)
+  } finally {
+    Message.clear()
   }
 }
 
+const handleExceed = () => {
+  Message.warning('只能上传一个头像文件')
+}
+
+const handleUploadError = (error: Error) => {
+  Message.error(`上传出错: ${error.message || '文件上传失败'}`)
+}
+
+const handleImageError = (e: Event) => {
+  const img = e.target as HTMLImageElement
+  img.src = 'https://example.com/default-avatar.png'
+}
+
 const fetchUserInfo = async () => {
+  loading.value = true
   try {
     const res = await getUserInfo()
+    console.log('用户信息响应:', res.data) // 调试日志
+    console.log('用户信息:', res.data)
     form.value = {
-      username: res.username,
-      nickname: res.nickname,
-      email: res.email,
-      avatar: res.avatar
+      username: res.data.username,
+      nickname: res.data.nickname || res.data.username,
+      email: res.data.email || '',
+      avatar: res.data.avatar 
+        ? (res.data.avatar.startsWith('http') 
+            ? res.data.avatar 
+            : `${import.meta.env.VITE_API_BASE_URL}${res.data.avatar}`)
+        : `${import.meta.env.VITE_API_BASE_URL}/static/default-avatar.png`
     }
+    console.log('表单数据:', form.value)
+    console.log('表单数据:', form.value) // 调试日志
   } catch (error) {
-    Message.error('获取用户信息失败')
+    Message.error(`获取用户信息失败: ${error.message || '未知错误'}`)
+    router.push('/login')
+  } finally {
+    loading.value = false
   }
 }
 
 const handleSubmit = async () => {
   loading.value = true
   try {
+    Message.loading('正在更新信息...')
     await updateUserInfo(form.value)
     Message.success('信息更新成功')
+    // 更新本地用户信息
+    const res = await getUserInfo()
+    form.value = {
+      username: res.data.username,
+      nickname: res.data.nickname || '',
+      email: res.data.email || '',
+      avatar: res.data.avatar || ''
+    }
   } catch (error) {
-    Message.error('信息更新失败')
+    console.error('更新错误:', error)
+    Message.error(`更新失败: ${error.response?.data?.message || error.message || '服务器错误'}`)
   } finally {
     loading.value = false
+    Message.clear()
   }
 }
 

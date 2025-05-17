@@ -1,6 +1,6 @@
 <template>
   <a-layout>
-    <Navbar />
+    <!-- <Navbar /> -->
     <a-layout-content>
       <router-view />
     </a-layout-content>

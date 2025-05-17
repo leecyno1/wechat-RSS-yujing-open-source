@@ -36,41 +36,6 @@
     </a-layout-header>
 
     <a-layout>
-      <!-- 侧边栏 -->
-      <a-layout-sider
-        v-if="isAuthenticated"
-        collapsible
-        :width="220"
-        breakpoint="xl"
-        @collapse="handleCollapse"
-      >
-        <a-menu
-          :default-selected-keys="[$route.name]"
-          :collapsed="collapsed"
-          @menu-item-click="handleMenuClick"
-        >
-          <a-menu-item key="ArticleList">
-            <template #icon><icon-apps /></template>
-            文章列表
-          </a-menu-item>
-          <a-menu-item key="AddSubscription">
-            <template #icon><icon-plus /></template>
-            添加订阅
-          </a-menu-item>
-          <a-sub-menu key="Settings">
-            <template #icon><icon-settings /></template>
-            <template #title>设置</template>
-            <a-menu-item key="EditUser">
-              <template #icon><icon-user /></template>
-              个人信息
-            </a-menu-item>
-            <a-menu-item key="ChangePassword">
-              <template #icon><icon-lock /></template>
-              修改密码
-            </a-menu-item>
-          </a-sub-menu>
-        </a-menu>
-      </a-layout-sider>
 
       <!-- 主内容区 -->
       <a-layout>

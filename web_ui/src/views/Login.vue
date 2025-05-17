@@ -48,29 +48,36 @@ const form = ref({
 const handleSubmit = async () => {
   loading.value = true
   try {
-    try {
-      const res = await login(form.value)
-      console.log('登录响应:', res)
-      
-      // 存储token
-      localStorage.setItem('token', res.access_token)
-      console.log('Token已存储:', localStorage.getItem('token'))
-      
-      // 检查存储配额
-      console.log('Storage剩余空间:', JSON.stringify(localStorage).length / 1024 + 'KB')
-    } catch (error) {
-      console.error('存储失败:', error)
-      Message.error('登录状态保存失败: ' + error.message)
-    }
+    // 使用URLSearchParams格式发送请求
+    const formData = new URLSearchParams()
+    formData.append('username', form.value.username)
+    formData.append('password', form.value.password)
     
-    // 处理登录后重定向
-    const redirect = router.currentRoute.value.query.redirect
-    console.log('重定向目标:', redirect)
-    await router.push(redirect ? redirect.toString() : '/')
-    console.log('跳转完成')
+    const res = await login({
+      username: form.value.username,
+      password: form.value.password
+    })
+    
+    if (res.access_token) {
+      // 存储token和过期时间
+      localStorage.setItem('token', res.access_token)
+      localStorage.setItem('token_expire', 
+        Date.now() + (res.expires_in * 1000))
+      
+      // 处理重定向
+      const redirect = router.currentRoute.value.query.redirect
+      await router.push(redirect ? redirect.toString() : '/')
+      Message.success('登录成功')
+    } else {
+      throw new Error('无效的响应格式')
+    }
   } catch (error) {
-    console.log(error)
-    Message.error('登录失败，请检查用户名和密码')
+    console.error('登录错误:', error)
+    const errorMsg = error.response?.data?.detail || 
+                    error.response?.data?.message || 
+                    error.message || 
+                    '登录失败，请检查用户名和密码'
+    Message.error(errorMsg)
   } finally {
     loading.value = false
   }

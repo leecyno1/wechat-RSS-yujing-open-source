@@ -21,8 +21,14 @@ export const login = (data: LoginParams) => {
   })
 }
 
+export interface VerifyResult {
+  is_valid: boolean
+  username: string
+  expires_at?: number
+}
+
 export const verifyToken = () => {
-  return http.get('/wx/auth/verify')
+  return http.get<VerifyResult>('/wx/auth/verify')
 }
 
 export const refreshToken = () => {

@@ -9,6 +9,9 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default='user')  # admin/editor/user
     permissions = Column(JSON, default=list)  # 权限列表
+    nickname = Column(String(50), default='')  # 昵称
+    avatar = Column(String(255), default='default-avatar.png')  # 头像
+    email = Column(String(50), default='')
     
     # 原有字段保持不变
     mp_name = Column(String(255))

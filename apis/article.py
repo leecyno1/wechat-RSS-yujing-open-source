@@ -7,16 +7,46 @@ router = APIRouter(prefix=f"/articles", tags=["文章管理"])
 async def get_articles(
     offset: int = Query(0, ge=0),
     limit: int = Query(5, ge=1, le=100),
+    status: str = Query(None),
+    search: str = Query(None),
+    mp_id: str = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
     session = DB.get_session()
     try:
-        from sqlalchemy import text
-        articles = session.execute(
-            text("SELECT * FROM articles LIMIT :limit OFFSET :offset"),
-            {"limit": limit, "offset": offset}
-        ).fetchall()
-        return {"code": 0, "data": articles}
+        from core.models.article import Article
+        from sqlalchemy import and_, or_
+        
+        # 构建查询条件
+        query = session.query(Article)
+        
+        if status:
+            query = query.filter(Article.status == status)
+        if mp_id:
+            query = query.filter(Article.mp_id == mp_id)
+        if search:
+            query = query.filter(
+                or_(
+                    Article.title.ilike(f"%{search}%"),
+                    Article.content.ilike(f"%{search}%")
+                )
+            )
+        
+        # 获取总数
+        total = query.count()
+        
+        # 分页查询（按发布时间降序）
+        from sqlalchemy import desc
+        articles = query.order_by(desc(Article.publish_time))\
+                       .offset(offset)\
+                       .limit(limit)\
+                       .all()
+        
+        from .base import success_response
+        return success_response({
+            "list": articles,
+            "total": total
+        })
     finally:
         session.close()
 
@@ -32,10 +62,15 @@ async def get_article_detail(
             {"id": article_id}
         ).fetchone()
         if not article:
+            from .base import error_response
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="文章不存在"
+                detail=error_response(
+                    code=40401,
+                    message="文章不存在"
+                )
             )
-        return {"code": 0, "data": article}
+        from .base import success_response
+        return success_response(article)
     finally:
         session.close()

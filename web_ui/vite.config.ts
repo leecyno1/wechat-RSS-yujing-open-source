@@ -16,15 +16,6 @@ export default defineConfig(({ command, mode }) => {
     // 基础路径配置
     base: command === 'serve' ? '/' : '/',
     // 开发服务器配置
-    server: {
-      proxy: {
-        '/wx': {
-          target: env.VITE_API_BASE_URL,
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
-        }
-      }
-    },
     // 构建配置
     build: {
       outDir: '../static',

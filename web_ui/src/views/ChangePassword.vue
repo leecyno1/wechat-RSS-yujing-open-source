@@ -75,13 +75,40 @@ const form = ref({
 const validatePassword = (value: string, callback: any) => {
   if (!value) {
     callback('请输入密码')
-  } else if (value.length < 6) {
-    callback('密码长度不能少于6位')
-  } else if (value.length > 20) {
-    callback('密码长度不能超过20位')
-  } else {
-    callback()
+    return
   }
+  
+  if (value.length < 8) {
+    callback('密码长度不能少于8位')
+    return
+  }
+  
+  if (value.length > 20) {
+    callback('密码长度不能超过20位')
+    return
+  }
+  
+  if (!/[A-Z]/.test(value)) {
+    callback('必须包含至少一个大写字母')
+    return
+  }
+  
+  if (!/[a-z]/.test(value)) {
+    callback('必须包含至少一个小写字母')
+    return
+  }
+  
+  if (!/[0-9]/.test(value)) {
+    callback('必须包含至少一个数字')
+    return
+  }
+  
+  if (!/[^A-Za-z0-9]/.test(value)) {
+    callback('必须包含至少一个特殊字符')
+    return
+  }
+  
+  callback()
 }
 
 const validateConfirmPassword = (value: string, callback: any) => {
@@ -101,18 +128,43 @@ const rules = {
 }
 
 const handleSubmit = async () => {
+  if (form.value.newPassword !== form.value.confirmPassword) {
+    Message.error('新密码与确认密码不一致')
+    return
+  }
+
   loading.value = true
+  Message.loading('正在修改密码...')
+  
   try {
-    await changePassword({
+    const response = await changePassword({
       old_password: form.value.currentPassword,
       new_password: form.value.newPassword
     })
-    Message.success('密码修改成功')
-    router.push('/')
+    
+    if (response.data.code === 0) {
+      Message.success('密码修改成功')
+      // 清除token强制重新登录
+      localStorage.removeItem('token')
+      setTimeout(() => {
+        router.push('/login')
+      }, 1500)
+    } else {
+      Message.error(`密码修改失败: ${response.data.message}`)
+    }
+    
   } catch (error) {
-    Message.error('密码修改失败')
+    console.error('密码修改错误:', error)
+    const errorMsg = error.response?.data?.detail || 
+                    error.response?.data?.message || 
+                    error.message || 
+                    '密码修改失败'
+    
+    Message.error(`密码修改失败: ${errorMsg}`)
+    
   } finally {
     loading.value = false
+    Message.clear()
   }
 }
 
