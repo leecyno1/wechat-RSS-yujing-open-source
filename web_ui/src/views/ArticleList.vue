@@ -90,22 +90,14 @@
         </template>
         <template #actions="{ record }">
           <a-button type="text" @click="editArticle(record.id)">
-            <template #icon><icon-edit /></template>
             编辑
           </a-button>
           <a-button type="text" status="danger" @click="deleteArticle(record.id)">
-            <template #icon><icon-delete /></template>
             删除
           </a-button>
         </template>
       </a-table>
     </a-card>
-
-    <AddSubscriptionModal
-      :visible="addModalVisible"
-      @update:visible="addModalVisible = $event"
-      @success="handleAddSuccess"
-    />
     </a-layout-content>
   </a-layout>
 </template>
@@ -113,10 +105,10 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
 import { getArticles } from '@/api/article'
-import { getSubscriptions } from '@/api/subscription'
+import { getSubscriptions ,UpdateMps} from '@/api/subscription'
 import { Message } from '@arco-design/web-vue'
-import AddSubscriptionModal from '@/components/AddSubscriptionModal.vue'
 import { formatDateTime } from '@/utils/date'
+import router from '@/router'
 
 const articles = ref([])
 const loading = ref(false)
@@ -132,7 +124,6 @@ const mpPagination = ref({
 })
 const searchText = ref('')
 const filterStatus = ref('')
-const addModalVisible = ref(false)
 
 const pagination = ref({
   current: 1,
@@ -236,11 +227,14 @@ const handleSearch = () => {
 }
 
 const refresh = () => {
+  UpdateMps(activeMpId.value).then(() => {
+    Message.success('刷新成功')
+  })
   fetchArticles()
 }
 
 const showAddModal = () => {
-  addModalVisible.value = true
+  router.push('/add-subscription')
 }
 
 const handleAddSuccess = () => {

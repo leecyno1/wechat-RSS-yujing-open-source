@@ -152,23 +152,23 @@ const handleUploadError = (error: Error) => {
 
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
-  img.src = 'https://example.com/default-avatar.png'
+  img.src = '/vite.svg'
 }
 
 const fetchUserInfo = async () => {
   loading.value = true
   try {
     const res = await getUserInfo()
-    console.log('用户信息响应:', res.data) // 调试日志
-    console.log('用户信息:', res.data)
+    console.log('用户信息响应:', res) // 调试日志
+    console.log('用户信息:', res)
     form.value = {
-      username: res.data.username,
-      nickname: res.data.nickname || res.data.username,
-      email: res.data.email || '',
-      avatar: res.data.avatar 
-        ? (res.data.avatar.startsWith('http') 
-            ? res.data.avatar 
-            : `${import.meta.env.VITE_API_BASE_URL}${res.data.avatar}`)
+      username: res.username,
+      nickname: res.nickname || res.username,
+      email: res.email || '',
+      avatar: res.avatar 
+        ? (res.avatar.startsWith('http') 
+            ? res.avatar 
+            : `${import.meta.env.VITE_API_BASE_URL}${res.avatar}`)
         : `${import.meta.env.VITE_API_BASE_URL}/static/default-avatar.png`
     }
     console.log('表单数据:', form.value)

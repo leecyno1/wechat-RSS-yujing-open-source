@@ -30,7 +30,8 @@ class Db:
         """Create all tables defined in models"""
         from core.models import article, feed, user  # 导入所有模型
         Base.metadata.create_all(self.engine)
-            
+        print('All Tables Created Successfully!')    
+        
     def close(self) -> None:
         """Close the database connection"""
         if self.session:

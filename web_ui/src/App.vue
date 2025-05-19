@@ -4,8 +4,7 @@
     <a-layout-header class="app-header">
       <div class="header-left">
         <div class="logo">
-          <icon-rss />
-          <span>{{appTitle}}</span>
+          <router-link to="/">{{appTitle}}</router-link>
         </div>
       </div>
       <div class="header-right">

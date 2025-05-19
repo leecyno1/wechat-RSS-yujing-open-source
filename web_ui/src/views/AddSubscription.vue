@@ -14,49 +14,38 @@
         @submit="handleSubmit"
         layout="vertical"
       >
-        <a-form-item label="公众号名称" field="name">
-          <a-input
-            v-model="form.name"
-            placeholder="请输入公众号名称"
-            allow-clear
-          >
-            <template #prefix><icon-user /></template>
-          </a-input>
+        <a-form-item label="公众号名称" field="item">
+          <a-space>
+            <a-select
+              v-model="form.item"
+              placeholder="请输入公众号名称"
+              allow-clear
+              allow-search
+              @search="handleSearch"
+              @change="handleSelect"
+            >
+            <a-option v-for="item of searchResults" :value="item" :label="item.nickname" />
+          </a-select>
+          </a-space>
         </a-form-item>
         
+        <a-form-item label="头像" field="avatar">
+          <a-avatar
+            v-model="form.avatar"
+            placeholder="头像"
+          >
+            <template #prefix><img :src="form.avatar" /></template>
+          </a-avatar>
+        </a-form-item>
         <a-form-item label="公众号ID" field="accountId">
           <a-input
-            v-model="form.accountId"
+            v-model="form.wx_id"
             placeholder="请输入公众号ID"
-            allow-clear
           >
             <template #prefix><icon-idcard /></template>
           </a-input>
         </a-form-item>
         
-        <a-form-item label="RSS链接" field="rssUrl">
-          <a-input
-            v-model="form.rssUrl"
-            placeholder="请输入RSS链接"
-            allow-clear
-          >
-            <template #prefix><icon-link /></template>
-          </a-input>
-        </a-form-item>
-        
-        <a-form-item label="分类" field="category">
-          <a-select
-            v-model="form.category"
-            placeholder="请选择分类"
-            allow-clear
-          >
-            <a-option value="news">新闻</a-option>
-            <a-option value="tech">科技</a-option>
-            <a-option value="finance">财经</a-option>
-            <a-option value="entertainment">娱乐</a-option>
-            <a-option value="sports">体育</a-option>
-          </a-select>
-        </a-form-item>
         
         <a-form-item label="描述" field="description">
           <a-textarea
@@ -84,16 +73,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { addSubscription } from '@/api/subscription'
+import { addSubscription,AddSubscriptionParams, searchBiz} from '@/api/subscription'
 
 const router = useRouter()
 const loading = ref(false)
+const searchResults = ref([])
 
 const form = ref({
   name: '',
-  accountId: '',
-  rssUrl: '',
-  category: '',
+  wx_id: '',
+  avatar:'',
   description: ''
 })
 
@@ -107,10 +96,42 @@ const rules = {
   category: [{ required: true, message: '请选择分类' }]
 }
 
+const handleSearch = async (value: string) => {
+  if (!value) {
+    searchResults.value = []
+    return
+  }
+  try {
+    const res = await searchBiz(value, {
+      kw: value,
+      offset: 0,
+      limit: 10
+    })
+    searchResults.value = res.list || []
+  } catch (error) {
+    Message.error('搜索公众号失败')
+    searchResults.value = []
+  }
+}
+
+const handleSelect = (item: any) => {
+  form.value.name = item.nickname
+  form.value.wx_id = item.fakeid // 修正拼写错误：fackid → fakeid
+  form.value.description = item.signature
+  form.value.avatar = item.round_head_img
+}
+
 const handleSubmit = async () => {
   loading.value = true
   try {
-    await addSubscription(form.value)
+    await addSubscription(
+      {
+      mp_name: form.value.name,
+      mp_id: form.value.wx_id,
+      avatar: form.value.avatar,
+      mp_intro: form.value.description,
+      }
+    )
     Message.success('订阅添加成功')
     router.push('/')
   } catch (error) {
@@ -128,6 +149,7 @@ const resetForm = () => {
     category: '',
     description: ''
   }
+  searchResults.value = []
 }
 
 const goBack = () => {

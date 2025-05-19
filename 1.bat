@@ -1,0 +1,16 @@
+curl ^"http://localhost:8001/api/v1/wx/mps^" ^
+  -H ^"Accept: application/json^" ^
+  -H ^"Accept-Language: zh-CN,zh;q=0.9^" ^
+  -H ^"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTc0NzYzNzA5OX0.HvJHy080dMWedLRRmi6PisnZyAAwbli-hmSctK02GA8^" ^
+  -H ^"Connection: keep-alive^" ^
+  -H ^"Content-Type: application/json^" ^
+  -H ^"Origin: http://127.0.0.1:3000^" ^
+  -H ^"Referer: http://127.0.0.1:3000/^" ^
+  -H ^"Sec-Fetch-Dest: empty^" ^
+  -H ^"Sec-Fetch-Mode: cors^" ^
+  -H ^"Sec-Fetch-Site: cross-site^" ^
+  -H ^"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 QuarkPC/2.7.0.328^" ^
+  -H ^"sec-ch-ua: ^\^"Not?A_Brand^\^";v=^\^"99^\^", ^\^"Chromium^\^";v=^\^"130^\^"^" ^
+  -H ^"sec-ch-ua-mobile: ?0^" ^
+  -H ^"sec-ch-ua-platform: ^\^"Windows^\^"^" ^
+  --data-raw ^"^{^\^"name^\^":^\^"csonline^\^",^\^"wx_id^\^":^\^"MjM5MjA4ODkwMA==^\^",^\^"avatar^\^":^\^"http://mmbiz.qpic.cn/mmbiz_png/pyRsnznAyuaAxJoE6SoSeM5IxhoGO24kDGDNAibgqpTo9UOg48h7hvjWNmsOm9MSZtIpiaPQGQyDd1sgLcxK0ibvw/0?wx_fmt=png^\^",^\^"description^\^":^\^"^世^纪^天^成^旗^下^业^内^第^一^生^化FPS^网^游^《^反^恐^精^英Online^》^，^又^称CSOL^。^\^",^\^"item^\^":^{^\^"fakeid^\^":^\^"MjM5MjA4ODkwMA==^\^",^\^"nickname^\^":^\^"csonline^\^",^\^"alias^\^":^\^"csol_china^\^",^\^"round_head_img^\^":^\^"http://mmbiz.qpic.cn/mmbiz_png/pyRsnznAyuaAxJoE6SoSeM5IxhoGO24kDGDNAibgqpTo9UOg48h7hvjWNmsOm9MSZtIpiaPQGQyDd1sgLcxK0ibvw/0?wx_fmt=png^\^",^\^"service_type^\^":0,^\^"signature^\^":^\^"^世^纪^天^成^旗^下^业^内^第^一^生^化FPS^网^游^《^反^恐^精^英Online^》^，^又^称CSOL^。^\^",^\^"verify_status^\^":2^}^}^"
