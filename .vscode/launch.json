@@ -9,18 +9,18 @@
             "type": "debugpy",
             "request": "launch",
             "env": {
-                "DB":"sqlite:///db.db",
-                // "DB":"mysql+pymysql://we-rss:123456@119.3.239.67/we-rss",
+                // "DB":"sqlite:///db.db",
+                "DB":"mysql+pymysql://we-rss:123456@119.3.239.67/we-rss",
                 "PORT": "8080",
                 "USERNAME":"admin",
                 "PASSWORD":"admin@123",
                 "DEBUG": "True",
                 // "DINGDING_WEBHOOK":"https://oapi.dingtalk.com/robot/send?access_token=67933f7b759241a79c122f42d02a627f4457c0b40603ddf3b4711e88e859d072"
                 // "DINGDING_WEBHOOK":"https://oapi.dingtalk.com/robot/send?access_token=af7f99c32895f79d9d61c57181f164b77027102a22f3b205dc15e2984690025c"
-                "DINGDING_WEBHOOK":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=a7240ff8-2d2e-48b3-b02a-c6a37fee69f7"
+                // "DINGDING_WEBHOOK":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=a7240ff8-2d2e-48b3-b02a-c6a37fee69f7"
             },
-            // "program": "main.py",
-            "program": "job.py",
+            "program": "main.py",
+            // "program": "job.py",
             "args": ["-init", "True","-job","False"]
         }
     ]

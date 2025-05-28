@@ -12,7 +12,6 @@ import '@arco-design/web-vue/dist/arco.css'
 // 导入自定义样式
 import './style.css'
 const app = createApp(App)
-
 // 注册 ArcoDesign
 app.use(ArcoVue)
 // 注册图标组件

@@ -29,11 +29,12 @@
         </a-form-item>
         
         <a-form-item label="头像" field="avatar">
-          <a-avatar
+          <a-avatar 
+          :src=avatar_url
             v-model="form.avatar"
             placeholder="头像"
           >
-            <template #prefix><img :src="form.avatar" /></template>
+          <img :src="avatar_url" width="80"/>
           </a-avatar>
         </a-form-item>
         <a-form-item label="公众号ID" field="accountId">
@@ -69,21 +70,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { addSubscription,AddSubscriptionParams, searchBiz} from '@/api/subscription'
-
+import {Avatar} from '@/utils/constants'
 const router = useRouter()
 const loading = ref(false)
 const searchResults = ref([])
-
+const avatar_url = ref('/static/default-avatar.png')
 const form = ref({
   name: '',
   wx_id: '',
   avatar:'',
   description: ''
 })
+
+// 监听 form.avatar 的变化
+watch(() => form.value.avatar, (newValue, oldValue) => {
+  console.log('头像地址已更新:', newValue);
+  // 这里可以添加更多处理逻辑
+  avatar_url.value=Avatar(newValue)
+}, { deep: true });
 
 const rules = {
   name: [{ required: true, message: '请输入公众号名称' }],

@@ -47,6 +47,7 @@ def search_Biz(kw:str="",limit=5,offset=0):
         response.raise_for_status  # 检查状态码是否为200
         data = response.text  # 解析JSON数据
         data = json.loads(data)  # 手动解析
+        
         data['publish_page']=json.loads(data['publish_page'])
     except Exception as e:
         print(f"请求失败: {e}")

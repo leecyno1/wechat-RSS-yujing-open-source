@@ -5,7 +5,8 @@ from fastapi.responses import FileResponse
 from apis.auth import router as auth_router
 from apis.user import router as user_router
 from apis.article import router as article_router
-from apis.wechat import router as wechat_router
+from apis.mps import router as wx_router
+from apis.res import router as res_router
 import os
 
 app = FastAPI(
@@ -27,14 +28,17 @@ app.add_middleware(
 )
 
 # 创建API路由分组
-api_router = APIRouter(prefix="/api/v1")
-api_router.include_router(auth_router, prefix="/wx")
-api_router.include_router(user_router, prefix="/wx")
-api_router.include_router(article_router, prefix="/wx")
-api_router.include_router(wechat_router, prefix="/wx")
+api_router = APIRouter(prefix="/api/v1/wx")
+api_router.include_router(auth_router)
+api_router.include_router(user_router)
+api_router.include_router(article_router)
+api_router.include_router(wx_router)
+resource_router = APIRouter(prefix="/static")
+resource_router.include_router(res_router)
 
 # 注册API路由分组
 app.include_router(api_router)
+app.include_router(resource_router)
 
 # 静态文件服务配置
 app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")

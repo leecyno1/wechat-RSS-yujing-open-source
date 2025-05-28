@@ -131,7 +131,7 @@ async def change_password(
     except Exception as e:
         session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=f"密码修改失败: {str(e)}"
         )
     finally:
@@ -173,6 +173,6 @@ async def upload_avatar(
         }
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=f"头像上传失败: {str(e)}"
         )

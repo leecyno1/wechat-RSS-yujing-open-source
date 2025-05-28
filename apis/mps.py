@@ -33,7 +33,7 @@ async def search_mp(
     except Exception as e:
         print(f"搜索公众号错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=error_response(
                 code=50001,
                 message="搜索公众号失败"
@@ -72,7 +72,7 @@ async def get_mps(
     except Exception as e:
         print(f"获取公众号列表错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=error_response(
                 code=50001,
                 message="获取公众号列表失败"
@@ -123,7 +123,7 @@ async def update_mps(
     except Exception as e:
         print(f"获取公众号详情错误: {str(e)}",e)
         # raise HTTPException(
-        #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        #     status_code=status.HTTP_406_NOT_ACCEPTABLE,
         #     detail=error_response(
         #         code=50001,
         #         message=f"获取公众号详情失败{str(e)}"
@@ -155,7 +155,7 @@ async def get_mp(
     except Exception as e:
         print(f"获取公众号详情错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=error_response(
                 code=50001,
                 message="获取公众号详情失败"
@@ -181,13 +181,13 @@ async def add_mp(
         
         import base64
         mpx_id = base64.b64decode(mp_id).decode("utf-8")
+        local_avatar_path = f"/{save_avatar_locally(avatar)}"
         
-
         # 创建新的Feed记录
         new_feed = Feed(
             id=f"MP_WXS_{mpx_id}",
             mp_name=mp_name,
-            mp_cover= avatar,
+            mp_cover= local_avatar_path,
             mp_intro=mp_intro,
             status=1,  # 默认启用状态
             created_at=now,
@@ -213,7 +213,7 @@ async def add_mp(
         session.rollback()
         print(f"添加公众号错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=error_response(
                 code=50001,
                 message="添加公众号失败"
@@ -221,3 +221,31 @@ async def add_mp(
         )
     finally:
         session.close()
+
+
+def save_avatar_locally(avatar_url):
+    if not avatar_url:
+        return None
+    
+    # 确保存储目录存在
+    save_dir = "static/avatars"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 生成唯一文件名
+    file_ext = os.path.splitext(urlparse(avatar_url).path)[1]
+    if not file_ext:
+        file_ext = ".jpg"
+    file_name = f"{uuid.uuid4().hex}{file_ext}"
+    file_path = os.path.join(save_dir, file_name)
+    
+    # 下载并保存文件
+    try:
+        response = requests.get(avatar_url)
+        response.raise_for_status()
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+        return file_path
+    except Exception as e:
+        print(f"保存头像失败: {str(e)}")
+        return None
+

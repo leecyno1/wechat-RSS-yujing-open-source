@@ -48,7 +48,7 @@ http.interceptors.response.use(
                     error.response?.data?.detail || 
                     error.message || 
                     '请求错误'
-    Message.error(errorMsg)
+    // Message.error(errorMsg)
     return Promise.reject(errorMsg)
   }
 )

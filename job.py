@@ -44,8 +44,6 @@ def do_job():
             if  wx_db.add_article(art):
                 mps_count=mps_count+1
                 text_list+=f"{mps_count}. [{art['title']}](https://mp.weixin.qq.com/s/{art['id']})[{art['created_at']}]\n"
-        else:
-            print("调试模式，不进行更新")
 
         logger.info(f"{item.mp_name} 更新结束,共更新{mps_count}")
         text+=f"+ **{item.mp_name}**({mps_count})\n{text_list}"

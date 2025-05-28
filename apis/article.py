@@ -105,7 +105,7 @@ async def delete_article(
     except Exception as e:
         session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
             detail=error_response(
                 code=50001,
                 message=f"删除文章失败: {str(e)}"
