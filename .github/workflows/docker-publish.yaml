@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: '20.18.3' # 替换为你的项目所需的 Node.js 版本
-      - name: Install dependencies
+      - name: Build Web UI
         run: |
           cd ./web_ui
           chmod +x build.sh
