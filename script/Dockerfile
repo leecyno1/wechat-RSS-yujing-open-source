@@ -1,8 +1,8 @@
-FROM ubuntu:latest
+FROM docker.1ms.run/ubuntu:18.04
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update
+# RUN apt update
 RUN apt install -y python3 
 RUN apt install -y python3-pip
 
