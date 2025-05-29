@@ -6,3 +6,4 @@ config.yaml
 static/cache/
 static/avatars/
 dock_build.bat
+db.db
