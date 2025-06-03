@@ -14,16 +14,16 @@
         @submit="handleSubmit"
         layout="vertical"
       >
-        <a-form-item label="公众号名称" field="item">
+        <a-form-item label="公众号名称" field="name">
           <a-space>
             <a-select
-              v-model="form.item"
+              v-model="form.name"
               placeholder="请输入公众号名称"
               allow-clear
               allow-search
               @search="handleSearch"
             >
-            <a-option v-for="item of searchResults" :value="item" :label="item.nickname" @click="handleSelect(item)" />
+            <a-option v-for="item of searchResults" :value="item.nickname" :label="item.nickname" @click="handleSelect(item)" />
           </a-select>
           </a-space>
         </a-form-item>

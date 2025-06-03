@@ -1,0 +1,14 @@
+2025-06-03 11:34:50 - core.task.log - INFO - Adding cron job with expression: * * * * * *
+2025-06-03 11:34:50 - core.task.log - INFO - Successfully added job 93303caf10574f58af1b926c5106195e
+2025-06-03 11:34:50 - core.task.log - INFO - Adding cron job with expression: * * * * * *
+2025-06-03 11:34:50 - core.task.log - INFO - Successfully added job bfabb557712c4879850e08ac578983e8
+2025-06-03 11:34:50 - core.task.log - INFO - Starting scheduler...
+2025-06-03 11:34:50 - core.task.log - INFO - Scheduler started successfully
+2025-06-03 11:34:51 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:34:51 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:34:52 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:35:00 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:35:07 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:35:14 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:35:22 - core.task.log - INFO - Executing job anonymous
+2025-06-03 11:35:30 - core.task.log - INFO - Executing job anonymous

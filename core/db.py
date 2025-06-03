@@ -75,9 +75,18 @@ class Db:
             print(f"Failed to fetch Feed: {e}")
             return e
             
+    def get_mps_list(self, mp_ids:str) -> List[Feed]:
+        try:
+            ids=mp_ids.split(',')
+            data = self.session.query(Feed).filter(Feed.id.in_(ids)).all()
+            return data
+        except Exception as e:
+            print(f"Failed to fetch Feed: {e}")
+            return e
     def get_mps(self, mp_id:str) -> Optional[Feed]:
         try:
-            data = self.session.query(Feed).filter_by(id=mp_id).first()
+            ids=mp_id.split(',')
+            data = self.session.query(Feed).filter_by(id= mp_id).first()
             return data
         except Exception as e:
             print(f"Failed to fetch Feed: {e}")

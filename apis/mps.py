@@ -10,7 +10,8 @@ import os
 import requests
 from urllib.parse import urlparse
 router = APIRouter(prefix=f"/mps", tags=["公众号管理"])
-
+def UpdateArticle(art:dict):
+            return DB.add_article(art)
 @router.get("/search/{kw}", summary="搜索公众号")
 async def search_mp(
     kw: str = "",
@@ -46,13 +47,17 @@ async def search_mp(
 async def get_mps(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    kw: str = Query(""),
     current_user: dict = Depends(get_current_user)
 ):
     session = DB.get_session()
     try:
         from core.models.feed import Feed
-        total = session.query(Feed).count()
-        mps = session.query(Feed).order_by(Feed.created_at.desc()).limit(limit).offset(offset).all()
+        query = session.query(Feed)
+        if kw:
+            query = query.filter(Feed.mp_name.ilike(f"%{kw}%"))
+        total = query.count()
+        mps = query.order_by(Feed.created_at.desc()).limit(limit).offset(offset).all()
         return success_response({
             "list": [{
                 "id": mp.id,
@@ -112,8 +117,7 @@ async def update_mps(
         else:
             wx=MpsApi(wx)
             
-        def UpdateArticle(art:dict):
-            return DB.add_article(art)
+       
         wx.get_Articles(mp.faker_id,Mps_id=mp.id,CallBack=UpdateArticle)
         result=wx.articles
         return success_response({
@@ -210,11 +214,16 @@ async def add_mp(
                 sync_time=0,
             )
             session.add(new_feed)
-        
+           
         session.commit()
         
         feed = existing_feed if existing_feed else new_feed
-        
+         #在这里实现第一次添加获取公众号文章
+        if not existing_feed:
+            from core.wx import Task
+            from core.wx import WxGather
+            Task.add_task( WxGather().Model().get_Articles,faker_id=feed.faker_id,Mps_id=feed.id,CallBack=UpdateArticle)
+            
         return success_response({
             "id": feed.id,
             "mp_name": feed.mp_name,

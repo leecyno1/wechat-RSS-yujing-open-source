@@ -3,10 +3,10 @@ on:
   push:
     branches:
       - main
-    paths:  # 仅在指定文件变化时触发（可选）
-      - 'core/ver.py'
-    # tags:
-    #   - 'v*'
+    # paths:  # 仅在指定文件变化时触发（可选）
+    #   - 'core/ver.py'
+    tags:
+      - 'v*'
 jobs:
   release:
     runs-on: ubuntu-latest

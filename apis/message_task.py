@@ -90,11 +90,13 @@ async def get_message_task(
         return error_response(code=500, message=str(e))
 
 
-
 class MessageTaskCreate(BaseModel):
     message_template: str
     web_hook_url: str
     mps_id: str=""
+    name: str=""
+    message_type: int=0
+    cron_exp:str=""
     status: Optional[int] = 0
 
 @router.post("", summary="创建消息任务", status_code=status.HTTP_201_CREATED)
@@ -120,7 +122,10 @@ async def create_message_task(
         db_task = MessageTask(
             message_template=task_data.message_template,
             web_hook_url=task_data.web_hook_url,
+            cron_exp=task_data.cron_exp,
             mps_id=task_data.mps_id,
+            message_type=task_data.message_type,
+            name=task_data.name,
             status=task_data.status if task_data.status is not None else 0
         )
         db.add(db_task)
@@ -166,7 +171,12 @@ async def update_message_task(
             db_task.mps_id = task_data.mps_id
         if task_data.status is not None:
             db_task.status = task_data.status
-        
+        if task_data.cron_exp is not None:
+            db_task.cron_exp = task_data.cron_exp
+        if task_data.message_type is not None:
+            db_task.message_type = task_data.message_type
+        if task_data.name is not None:
+            db_task.name = task_data.name
         db.commit()
         db.refresh(db_task)
         return success_response(data=db_task)

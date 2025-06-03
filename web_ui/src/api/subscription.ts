@@ -28,6 +28,17 @@ export interface AddSubscriptionParams {
   mp_intro?: string
 }
 
+export interface MpItem {
+  mp_id: string
+  mp_name: string
+  avatar: string
+}
+
+export interface MpSearchResult {
+  code: number
+  data: MpItem[]
+}
+
 export const getSubscriptions = (params?: { page?: number; pageSize?: number }) => {
   const apiParams = {
     offset: (params?.page || 0) * (params?.pageSize || 10),
@@ -44,6 +55,7 @@ export const getSubscriptionDetail = (mp_id: string) => {
 export const addSubscription = (data: AddSubscriptionParams) => {
   return http.post<{code: number, message: string}>('/wx/mps', data)
 }
+
 export const deleteMpApi = (mp_id: string) => {
   return http.delete<{code: number, message: string}>(`/wx/mps/${mp_id}`)
 }
@@ -61,10 +73,21 @@ export const UpdateMps = (mp_id: string) => {
 export const updateSubscription = (mp_id: string, data: Partial<Subscription>) => {
   return http.put<{code: number, message: string}>(`/wx/mps/${mp_id}`, data)
 }
+
 export const searchBiz = (kw: string, params: { page?: number; pageSize?: number }) => {
   const apiParams = {
     offset: (params?.page || 0) * (params?.pageSize || 10),
     limit: params?.pageSize || 10
   }
   return http.get<SubscriptionListResult>(`/wx/mps/search/${kw}`,{ params: apiParams })
+}
+
+// 搜索公众号(不分页)
+export const searchMps = (kw: string, params: { page?: number; pageSize?: number }) => {
+  const apiParams = {
+    kw:kw||"",
+    offset: (params?.page || 0) * (params?.pageSize || 10),
+    limit: params?.pageSize || 10
+  }
+  return http.get<SubscriptionListResult>(`/wx/mps`,{ params: apiParams })
 }

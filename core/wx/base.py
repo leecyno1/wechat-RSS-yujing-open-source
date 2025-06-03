@@ -13,6 +13,14 @@ class WxGather:
         if getattr(self, 'articles', None) is not None:
             return len(self.articles)
         return 0
+    def Model(self):
+        if cfg.get("model","web")=="web":
+            from core.wx import MpsWeb
+            wx=MpsWeb()
+        else:
+            from core.wx import MpsApi
+            wx=MpsApi()
+        return wx
     def __init__(self,is_add:bool=False):
          
         self.is_add=is_add

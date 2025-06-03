@@ -6,10 +6,10 @@ import ChangePassword from '../views/ChangePassword.vue'
 import EditUser from '../views/EditUser.vue'
 import AddSubscription from '../views/AddSubscription.vue'
 import WeChatMpManagement from '../views/WeChatMpManagement.vue'
-import MessageTaskList from '../views/MessageTaskList.vue'
-import MessageTaskDetail from '../views/MessageTaskDetail.vue'
 import ConfigList from '../views/ConfigList.vue'
 import ConfigDetail from '../views/ConfigDetail.vue'
+import MessageTaskList from '../views/MessageTaskList.vue'
+import MessageTaskForm from '../views/MessageTaskForm.vue'
 
 const routes = [
   {
@@ -50,19 +50,6 @@ const routes = [
         }
       },
       {
-        path: 'message-tasks',
-        name: 'MessageTaskList',
-        component: MessageTaskList,
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'message-tasks/:id',
-        name: 'MessageTaskDetail',
-        component: MessageTaskDetail,
-        props: true,
-        meta: { requiresAuth: true }
-      },
-      {
         path: 'configs',
         name: 'ConfigList',
         component: ConfigList,
@@ -80,7 +67,44 @@ const routes = [
           requiresAuth: true,
           permissions: ['config:view'] 
         }
-      }
+      },
+      {
+        path: 'message-tasks',
+        name: 'MessageTaskList',
+        component: MessageTaskList,
+        meta: { 
+          requiresAuth: true,
+          permissions: ['message_task:view'] 
+        }
+      },
+      {
+        path: 'message-tasks/add',
+        name: 'MessageTaskAdd',
+        component: MessageTaskForm,
+        meta: { 
+          requiresAuth: true,
+          permissions: ['message_task:edit'] 
+        }
+      },
+      {
+        path: 'message-tasks/edit/:id',
+        name: 'MessageTaskEdit',
+        component: MessageTaskForm,
+        props: true,
+        meta: { 
+          requiresAuth: true,
+          permissions: ['message_task:edit'] 
+        }
+      },
+      {
+        path: 'sys-info',
+        name: 'SysInfo',
+        component: () => import('@/views/SysInfo.vue'),
+        meta: { 
+          requiresAuth: true,
+          permissions: ['admin'] 
+        }
+      },
     ]
   },
   {
