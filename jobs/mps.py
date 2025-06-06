@@ -34,6 +34,7 @@ def test(info:str):
 from core.models.message_task import MessageTask
 # from core.queue import TaskQueue
 from .webhook import web_hook
+interval=int(cfg.get("interval",60)) # 每隔多少秒执行一次
 def do_job(mps:list[Feed]=None,task:MessageTask=None):
         # TaskQueue.add_task(test,info=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         # print("执行任务", task.mps_id)
@@ -42,7 +43,7 @@ def do_job(mps:list[Feed]=None,task:MessageTask=None):
         wx=WxGather().Model()
         for item in mps:
             try:
-                wx.get_Articles(item.faker_id,CallBack=UpdateArticle,Mps_id=item.id,Mps_title=item.mp_name, MaxPage=1,Over_CallBack=Update_Over)
+                wx.get_Articles(item.faker_id,CallBack=UpdateArticle,Mps_id=item.id,Mps_title=item.mp_name, MaxPage=1,Over_CallBack=Update_Over,interval=interval)
             except Exception as e:
                 print(e)
             finally:
@@ -77,9 +78,13 @@ def start_job():
         return
     for task in tasks:
         cron_exp=task.cron_exp
+        if not cron_exp:
+            print_error(f"任务[{task.id}]没有设置cron表达式")
+            continue
         if DEBUG:
-            cron_exp="*/1 * * * *"
-            cron_exp="* * * * * *"
+            cron_exp="* * * * *"
+            # cron_exp="* * * * * *"
+            pass
         job_id=scheduler.add_cron_job(add_job,cron_expr=cron_exp,args=[get_feeds(task),task])
         print(f"已添加任务: {job_id}")
     scheduler.start()
