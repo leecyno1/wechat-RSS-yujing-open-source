@@ -66,7 +66,7 @@ class Db:
                 art.updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             art.created_at=datetime.strptime(art.created_at ,'%Y-%m-%d %H:%M:%S')
             art.updated_at=datetime.strptime(art.updated_at,'%Y-%m-%d %H:%M:%S')
-            art.content=Text(art.content)
+            art.content=art.content
             from core.models.base import DATA_STATUS
             art.status=DATA_STATUS.ACTIVE
             self._session.add(art) 

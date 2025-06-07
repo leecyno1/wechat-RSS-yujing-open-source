@@ -18,11 +18,14 @@ if exist %version_file% (
     echo 警告：未找到对应版本号的文件 %version_file%
 )
 
-echo %comment%
-git add .
-git tag  "v%VERSION%" -m "%comment%"
-git commit -m "%VERSION%-%comment%"
-git push -u origin main 
-git push origin  %tag%
-git push -u gitee main
-git push gitee  %tag% 
+if "%1"=="-p" (
+    git push -u origin main 
+    git push origin  %tag%
+    git push -u gitee main
+    git push gitee  %tag%
+) else (
+    echo %comment%
+    git add .
+    git tag  "v%VERSION%" -m "%comment%"
+    git commit -m "%VERSION%-%comment%"
+)

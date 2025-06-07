@@ -45,7 +45,7 @@ class Config:
                 config = yaml.safe_load(f)
                 self.config = config
                 self._config = self.replace_env_vars(config)
-                return self._config
+                return self.config
         except Exception as e:
             print(f"Error loading configuration file {self.config_path}: {e}")
             sys.exit(1)
