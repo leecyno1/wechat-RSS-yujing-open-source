@@ -49,15 +49,15 @@ if %COMMENT_FLAG%==1 (
     )
 )
 
+echo %comment%
+git add .
+git tag  "v%VERSION%" -m "%comment%"
+git commit -m "%VERSION%-%comment%"
+
 REM 执行git操作
 if %PUSH_FLAG%==1 (
     git push -u origin main 
     git push origin  %tag%
     git push -u gitee main
     git push gitee  %tag%
-) else (
-    echo %comment%
-    git add .
-    git tag  "v%VERSION%" -m "%comment%"
-    git commit -m "%VERSION%-%comment%"
-)
+) 
