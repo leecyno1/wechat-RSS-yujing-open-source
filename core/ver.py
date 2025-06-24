@@ -14,7 +14,7 @@ except ValueError as e:
 #API接口前缀
 API_BASE = "/api/v1/wx"
 #当前程序版本
-VERSION = '1.4.1'
+VERSION = '1.4.2'
 
 #工作目录
 WORK_DIR="./work"

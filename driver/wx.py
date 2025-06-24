@@ -9,6 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 import time
 import os
 import re
+from threading import Thread
 from threading import Timer
 import json
 from core.print import print_error
@@ -64,12 +65,11 @@ class Wx:
             print(f"提取token时出错: {str(e)}")
             return None
     def GetCode(self,CallBack=None):
-        if  self.isLOCK:
+        if  self.isLock():
             return {"code":self.wx_login_url,"msg":"微信公众平台登录脚本正在运行，请勿重复运行！"}
         print("子线程执行中")
-        from threading import Thread
-        thread = Thread(target=self.wxLogin,args=(CallBack,))  # 传入函数名
-        thread.start()  # 启动线程
+        self.thread = Thread(target=self.wxLogin,args=(CallBack,))  # 传入函数名
+        self.thread.start()  # 启动线程
         print("微信公众平台登录 v1.34")
         return WX_API.QRcode()
     wait_time=100
@@ -104,7 +104,19 @@ class Wx:
         self.controller.start_browser()
         self.controller.open_url(self.WX_HOME)
         self.schedule_refresh()
-                 
+    def isLock(self):             
+        if self.isLock:
+            if os.path.exists(self.wx_login_url):
+                try:
+                    size=os.path.getsize(self.wx_login_url)
+                    return size>364
+                except Exception as e:
+                    print(f"二维码图片获取失败: {str(e)}")
+                    return False
+            else:
+                print("二维码图片不存在，请重新获取")
+                return False
+        return self.isLock
     def wxLogin(self,CallBack=None,NeedExit=False, refresh_interval=60):
         """
         微信公众平台登录流程：
@@ -141,7 +153,7 @@ class Wx:
               # 然后等待其中的图片加载完成
             wait.until(lambda d: d.execute_script(
                 "return document.querySelector('img').complete"))
-            # time.sleep(2)
+            time.sleep(2)
             
             # 滚动到二维码区域
             qrcode = controller.driver.find_element(By.CLASS_NAME, "login__type__container__scan__qrcode")
@@ -170,7 +182,8 @@ class Wx:
             
             print("二维码已保存为 wx_qrcode.png，请扫码登录...")
             self.HasCode=True
-            
+            if os.path.getsize(self.wx_login_url)<=364:
+                raise Exception("二维码图片获取失败，请重新扫码")
             # 等待登录成功（检测二维码图片加载完成）
             print("等待扫码登录...")
             wait = WebDriverWait(controller.driver, 120)
