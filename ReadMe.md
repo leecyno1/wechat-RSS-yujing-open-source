@@ -228,6 +228,8 @@ QQ:244538330
 # 友情链接
 [WeWe RSS](https://github.com/cooderl/wewe-rss)
 [橙单-高质量低代码平台](https://gitee.com/orangeform/orange-admin)
+[orange-flowable](https://gitee.com/orangeform/orange-flowable)
+
 # ❤️ 赞助
 如果觉得 We-MP-RSS 对你有帮助，欢迎给我来一杯啤酒！<br/>
 <img src="docs/赞赏码.jpg" width=180/>
