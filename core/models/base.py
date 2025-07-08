@@ -1,7 +1,7 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine, Column, Integer, String, DateTime,Date,ForeignKey,Boolean,Text,Enum,Table
 from sqlalchemy import inspect
-from sqlalchemy.dialects.mysql import MEDIUMTEXT
+from sqlalchemy.dialects.mysql import MEDIUMTEXT,LONGTEXT,LONGBLOB
 from sqlalchemy.exc import SQLAlchemyError
 
 

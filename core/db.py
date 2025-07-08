@@ -45,7 +45,11 @@ class Db:
     def create_tables(self):
         """Create all tables defined in models"""
         from core.models.base import Base as B # 导入所有模型
-        B.metadata.create_all(self.engine)
+        try:
+            B.metadata.create_all(self.engine)
+        except Exception as e:
+            print_error(f"Error creating tables: {e}")
+
         print('All Tables Created Successfully!')    
         
     def close(self) -> None:

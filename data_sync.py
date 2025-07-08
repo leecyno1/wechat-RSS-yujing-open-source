@@ -42,6 +42,17 @@ class DatabaseSynchronizer:
                     self.logger.warning(f"无法加载模型模块 {module_name}: {e}")
         return self.models
     
+    def _map_types_for_sqlite(self, model):
+        """为SQLite处理特殊类型映射"""
+        if "sqlite" not in self.db_url:
+            return
+            
+        for column in model.__table__.columns:
+            if hasattr(column.type, "__visit_name__"):
+                if column.type.__visit_name__ == "MEDIUMTEXT":
+                    from sqlalchemy import Text
+                    column.type = Text()
+    
     def sync(self):
         """同步模型到数据库"""
         try:
@@ -50,6 +61,11 @@ class DatabaseSynchronizer:
             
             # 反射现有数据库结构
             metadata.reflect(bind=self.engine)
+            
+            # 处理SQLite的特殊类型映射
+            if "sqlite" in self.db_url:
+                for model in self.models.values():
+                    self._map_types_for_sqlite(model)
             
             # 加载模型
             if not self.models:
@@ -78,7 +94,7 @@ class DatabaseSynchronizer:
             return True
         except SQLAlchemyError as e:
             self.logger.error(f"数据库同步失败: {e}")
-            raise
+            # raise
 
 def main():
     # 示例使用

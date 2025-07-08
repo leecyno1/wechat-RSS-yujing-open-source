@@ -14,4 +14,3 @@ class Article(Base):
     updated_at = Column(DateTime)  
     is_export = Column(Integer)
 
-

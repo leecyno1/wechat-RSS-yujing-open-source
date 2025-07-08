@@ -46,13 +46,13 @@ rss:
   #RSS封面
   cover: ${RSS_COVER:-}
   #是否显示全文 默认False
-  full_context: ${RSS_FULL_CONTEXT:-False}
+  full_context: ${RSS_FULL_CONTEXT:-True}
   #是否添加封面图片 默认False
   add_cover: ${RSS_ADD_COVER:-True}
   #RSS正文是否启用 CDATA
   cdata: ${RSS_CDATA:-False}
   #RSS分页大小 默认10
-  page_size: ${RSS_PAGE_SIZE:-10}
+  page_size: ${RSS_PAGE_SIZE:-30}
 
 #登录会话有效时长 单位分钟 默认60分钟
 token_expire_minutes: ${TOKEN_EXPIRE_MINUTES:-60}
