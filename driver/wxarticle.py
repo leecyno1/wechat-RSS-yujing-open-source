@@ -96,6 +96,9 @@ class WXArticleFetcher:
             if "该内容已被发布者删除" in body or "The content has been deleted by the author." in body:
                 info["content"]="DELETED"
                 raise Exception("该内容已被发布者删除")
+            if  "内容审核中" in body:
+                info['content']="DELETED"
+                raise Exception("内容审核中")
             # 等待关键元素加载
             wait.until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "#activity-detail"))
