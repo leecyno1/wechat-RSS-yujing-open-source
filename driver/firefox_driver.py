@@ -310,7 +310,7 @@ class FirefoxController:
             self.options.set_preference("webdriver.log.driver", "OFF")
             self.options.set_preference("webdriver.log.browser", "OFF")
             from core.config import cfg
-            if headless and cfg.get("debug",False):
+            if headless and cfg.get("debug",False)==False:
                 self.options.add_argument("--headless")          # 启用无界面模式
                 pass  
             if headless and  self.system != "windows":

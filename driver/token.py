@@ -8,7 +8,8 @@ if not os.path.exists(lic_path):
         f.write("{}")
 wx_cfg = Config(lic_path)
 
-def set_token(data:any):
+def set_token(data:any,ext_data:any=None):
+
     """
     设置微信登录的Token和Cookie信息
     :param data: 包含Token和Cookie信息的字典
@@ -16,11 +17,15 @@ def set_token(data:any):
     wx_cfg.set("token", data.get("token", ""))
     wx_cfg.set("cookie", data.get("cookies_str", ""))
     wx_cfg.set("expiry", data.get("expiry", {}))
+    wx_cfg.set("ext_data", ext_data)
     wx_cfg.save_config()
     wx_cfg.reload()
+    print(ext_data)
     from jobs.notice import sys_notice
-    sys_notice(f"WeRss授权成功", cfg.get("server.code_title","WeRss授权成功"))
+    sys_notice(f"WeRss授权成功\n- 名称:{ext_data['wx_app_name']}\n- Token: \n{data.get("token")}\n- Expiry: \n{data.get("expiry")['expiry_time']}", cfg.get("server.code_title","WeRss授权成功"))
+
+
     # cfg.set("token", data.get("token", ""))
     # cfg.save_config()
 def get(key:str,default:any=None):
-    wx_cfg.get(f"{key}",default)
+    return wx_cfg.get(key, default)

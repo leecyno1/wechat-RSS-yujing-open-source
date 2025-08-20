@@ -88,6 +88,10 @@ docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  docker.1ms.ru
 
 ## 安装指南
 
+# 二次开发
+## 环境需求
+- Python>=3.13.1
+- Node>=20.18.3
 ### 后端服务
 
 1. 克隆项目
@@ -107,8 +111,28 @@ pip install -r requirements.txt
 cp config.example.yaml config.yaml
 copy config.example.yaml config.yaml
 ```
+3. 启动服务
+```bash
+python main.py -job True -init True
+```
 
-### 环境变量配置
+## 前端开发
+1. 安装前端依赖
+```bash
+cd we-mp-rss/web_ui
+yarn install
+```
+
+2. 启动前端服务
+```bash
+yarn dev
+```
+3. 访问前端页面
+```
+http://localhost:3000
+```
+
+# 环境变量配置
 
 以下是 `config.yaml` 中支持的环境变量配置：
 
@@ -160,13 +184,13 @@ copy config.example.yaml config.yaml
 | `EXPORT_MARKDOWN` | `False` | 是否启用markdown导出功能 |
 | `EXPORT_MARKDOWN_DIR` | `./data/markdown` | markdown导出目录 |
 
-## 使用说明
+# 使用说明
 
 1. 启动服务后，访问 `http://<您的IP>:8001` 进入管理界面。
 2. 使用微信扫码授权后，即可添加和管理订阅。
 3. 定时任务会自动更新内容，并生成RSS订阅链接。
 
-## 常见问题
+# 常见问题
 
 - **如何修改数据库连接？**
   在 `config.yaml` 中修改 `db` 配置项，或通过环境变量 `DB` 覆盖。

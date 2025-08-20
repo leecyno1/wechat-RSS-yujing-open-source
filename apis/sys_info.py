@@ -75,7 +75,7 @@ async def get_system_info(
     """
     try:
       
-
+        wx_cfg.reload()
         # 获取系统信息
         system_info = {
             'os': {

@@ -49,9 +49,10 @@ class Wx:
         if os.path.exists(self.wx_login_url):
             return True
         return False
-    def extract_token_from_requests(self,driver):
+    def extract_token_from_requests(self):
         """从页面中提取token"""
         try:
+            driver=self.controller.driver
             # 尝试从当前URL获取token
             current_url = driver.current_url
             token_match = re.search(r'token=([^&]+)', current_url)
@@ -130,12 +131,12 @@ class Wx:
                 controller = FirefoxController()
                 self.controller=controller
             from driver.token import wx_cfg
-            token=wx_cfg.get("token", "")
+            token=str(wx_cfg.get("token", ""))
             self.controller.start_browser()
-            self.controller.open_url(self.WX_HOME)
+            self.controller.open_url(f"{self.WX_HOME}?t=home/index&lang=zh_CN&token={token}")
             cookie=Store.load()
             self.controller.add_cookies(cookie)
-            self.controller.add_cookie({"name":"token","value":str(token)})
+            self.controller.add_cookie({"name":"token","value":token})
 
             qrcode = controller.driver.find_element(By.ID, "jumpUrl")
             wait = WebDriverWait(controller.driver, self.wait_time)
@@ -256,11 +257,8 @@ class Wx:
         for cookie in cookies:
             # print(f"{cookie['name']}={cookie['value']}")
             cookies_str+=f"{cookie['name']}={cookie['value']}; "
-        if token=="":
-            for cookie in cookies:
-                if 'token' in cookie['name'].lower():
-                    token= cookie['value']
-                    break
+            if 'token' in cookie['name'].lower():
+                token= cookie['value']
         # 计算 slave_sid cookie 有效时间
         cookie_expiry = expire(cookies)
         return{
@@ -272,8 +270,31 @@ class Wx:
             }
     def Call_Success(self):
         # 获取token
-        token = self.extract_token_from_requests(self.controller.driver)
+        token = self.extract_token_from_requests()
+        # 获取公众号名称
+        wx_app_name=self.controller.driver.find_element(By.XPATH,'/html/body/div[1]/div/div[4]/div/div/div[2]/div[2]/div[1]/div[1]/div/div[1]/div').text
+        # 获取公众号头像
+        wx_logo=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[1]/img').get_attribute("src")
+        #昨日阅读(次)
+        wx_read_yesterday=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[1]/em').text
+        #昨日分享(次)
+        wx_share_yesterday=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[2]/em').text
+        #昨日新增关注(人)
+        wx_watch_yesterday=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[3]/em/a/span').text
+        #原创内容
+        wx_yuan_count=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[2]/div/span').text
+        #总用户数
+        wx_user_count=self.controller.driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[3]/div/span').text
         
+        self.ext_data={"wx_app_name":wx_app_name,
+                       "wx_logo":wx_logo,
+                       "wx_read_yesterday":wx_read_yesterday,
+                       "wx_share_yesterday":wx_share_yesterday,
+                       "wx_watch_yesterday":wx_watch_yesterday,
+                       "wx_yuan_count":wx_yuan_count,
+                       "wx_user_count":wx_user_count}
+
+
         # 获取当前所有cookie
         cookies = self.controller.driver.get_cookies()
         # print("\n获取到的Cookie:")
@@ -288,16 +309,18 @@ class Wx:
         
         # print(cookie_expiry)
         if self.CallBack is not None:
-            self.CallBack(self.SESSION)
+            self.CallBack(self.SESSION,self.ext_data)
+
         return self.SESSION 
     
     def Close(self):
         rel=False
         try:
-                self.controller.close()
+                self.controller.Close()
                 rel=True
-        except:
+        except Exception as e:
             # print("浏览器未启动")
+            print(e)
             pass
         return rel
     def Clean(self):

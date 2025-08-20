@@ -1,9 +1,9 @@
 from .token import set_token
-from core.print import print_warning
+from core.print import print_warning,print_success
 #判断是否是有效登录 
 
 # 初始化全局变量
-WX_LOGIN_ED = False
+WX_LOGIN_ED = True
 WX_LOGIN_INFO = None
 
 import threading
@@ -28,14 +28,16 @@ def setLoginInfo(info):
     with login_lock:
         WX_LOGIN_INFO=info
 
-def Success(data):
+def Success(data:any,ext_data:any=None):
     if data != None:
             # print("\n登录结果:")
             setLoginInfo(data)
             setStatus(True)
+            if ext_data:
+                print_success(f"名称：{ext_data['wx_app_name']}")
             if data['expiry'] !=None:
-                print(f"有效时间: {data['expiry']['expiry_time']} (剩余秒数: {data['expiry']['remaining_seconds']})")
-                set_token(data)
+                print_success(f"有效时间: {data['expiry']['expiry_time']} (剩余秒数: {data['expiry']['remaining_seconds']}) Token: {data['token']}")
+                set_token(data,ext_data)
             else:
                 print_warning("登录失败，请检查上述错误信息")
                 setStatus(False)

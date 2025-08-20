@@ -38,7 +38,11 @@ def testMarkDown():
     from core.content_format import  format_content
     print(format_content(art.content,"markdown"))
     pass
-
+def testToken():
+    from driver.auth import auth
+    auth()
+    # input("按任意键退出")
 if __name__=="__main__":
-    testWeb()
+    # testWeb()
+    testToken()
     # testMarkDown()

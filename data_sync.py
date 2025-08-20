@@ -86,14 +86,30 @@ class DatabaseSynchronizer:
                 # MySQL使用AUTO_INCREMENT
                 pass  # SQLAlchemy默认处理
             
-            # 创建所有表（如果不存在）
+            # 创建或更新表结构
             for model in self.models.values():
-                if not inspect(self.engine).has_table(model.__tablename__):
+                table_name = model.__tablename__
+                inspector = inspect(self.engine)
+                
+                if not inspector.has_table(table_name):
                     model.metadata.create_all(self.engine)
-                    self.logger.info(f"创建表: {model.__tablename__}")
+                    self.logger.info(f"创建表: {table_name}")
                 else:
-                    self.logger.info(f"表已存在: {model.__tablename__}")
+                    # 检查字段差异并更新表
+                    existing_columns = {c["name"]: c for c in inspector.get_columns(table_name)}
+                    model_columns = {c.name: c for c in model.__table__.columns}
                     
+                    # 检查新增或修改的字段
+                    for col_name, model_col in model_columns.items():
+                        if col_name not in existing_columns:
+                            # 新增字段
+                            from sqlalchemy import text
+                            with self.engine.begin() as conn:
+                                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {model_col.type}"))
+                            self.logger.info(f"新增字段: {table_name}.{col_name}")
+                    
+                    self.logger.info(f"表已同步: {table_name}")
+            
             self.logger.info("模型同步完成")
             return True
         except SQLAlchemyError as e:

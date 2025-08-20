@@ -24,6 +24,8 @@ class KeyStore:
                     del item["domain"]
                 if item['name'] =="_clck":
                     continue
+                if item['name'] =="token":
+                    continue
                 new_items.append(item)
             return new_items
         except:

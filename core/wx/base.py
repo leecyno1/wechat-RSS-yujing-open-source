@@ -74,13 +74,29 @@ class WxGather:
         cfg.reload()
         wx_cfg.reload()
         self.Gather_Content=cfg.get('gather.content',False)
-        self.user_agent = cfg.get('user_agent', '')
         self.cookies = wx_cfg.get('cookie', '')
         self.token=wx_cfg.get('token','')
+        # 随机选择一个 User-Agent
+        self.user_agent = cfg.get('user_agent', '')
+        user_agent = random.choice(USER_AGENTS)
+        self.user_agent=user_agent
         self.headers = {
             "Cookie":self.cookies,
-            "User-Agent": self.user_agent 
+            "User-Agent": user_agent
         }
+    def fix_header(self,url):
+         user_agent = random.choice(USER_AGENTS)
+          # 更新请求头
+         headers = self.headers.copy()
+         headers.update({
+                "User-Agent": user_agent,
+                "Refer": url,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive"
+            })
+         return headers
     def content_extract(self,  url):
         text=""
         try:
@@ -88,14 +104,7 @@ class WxGather:
             # 随机选择一个 User-Agent
             user_agent = random.choice(USER_AGENTS)
             # 更新请求头
-            headers = self.headers.copy()
-            headers.update({
-                "User-Agent": user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive"
-            })
+            headers = self.fix_header(url)
             r = session.get(url, headers=headers)
             if r.status_code == 200:
                 text = r.text
@@ -143,10 +152,7 @@ class WxGather:
             "f": "json",
             "ajax": "1"
         }
-        headers = {
-            "Cookie": self.cookies,
-            "User-Agent":self.user_agent
-        }
+        headers=self.fix_header(url)
         if self.token is None or self.token == "":
             self.Error("请先扫码登录公众号平台")
             return
