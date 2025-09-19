@@ -74,6 +74,7 @@ class Config:
                     raise
                 # 加密整个YAML内容
                 encrypted_content = self._encrypt(yaml_content)
+                os.remove(self.config_path)
                 with open(self.config_path, 'w', encoding='utf-8') as f:
                     f.write(encrypted_content)
                 self.reload()

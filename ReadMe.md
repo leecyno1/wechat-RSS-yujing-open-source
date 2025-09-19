@@ -11,6 +11,16 @@ docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rache
 ```
 http://<您的ip>:8001/  即可开启
 
+# 快速升级 
+
+```
+docker stop we-mp-rss
+docker rm we-mp-rss
+docker pull ghcr.io/rachelos/we-mp-rss:latest
+# 如果添加了其它参数，请自行修改
+docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
+```
+
 # 官方镜像
 ```
 docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  rachelos/we-mp-rss:latest
@@ -207,3 +217,9 @@ http://localhost:3000
   
 - **如何修改文章内容发送格式？**
   修改 `config.yaml` 中的 `WEBHOOK.CONTENT_FORMAT` 或通过环境变量 `WEBHOOK.CONTENT_FORMAT` 设置。
+
+- **默认帐号、密码是多少？**
+  - 默认帐号：admin
+  - 默认密码：admin@123
+
+[Star History Chart]: https://api.star-history.com/svg?repos=rachelos/we-mp-rss&type=Timeline

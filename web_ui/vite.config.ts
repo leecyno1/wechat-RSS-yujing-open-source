@@ -18,9 +18,15 @@ export default defineConfig(({ command, mode }) => {
     // 开发服务器配置
     // 构建配置
     build: {
-      outDir: "../static",
+      outDir: "dist",
       emptyOutDir: true,
       assetsDir: "assets",
+      // 确保资源路径使用相对路径，适合 Flutter WebView 加载
+      rollupOptions: {
+        output: {
+          manualChunks: undefined,
+        },
+      },
     },
     server: {
       host: "0.0.0.0",

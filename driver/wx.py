@@ -201,7 +201,9 @@ class Wx:
             # 确保二维码可见
             wait.until(EC.visibility_of(qrcode))
             # 全屏截图并裁剪二维码区域
+            code_src=qrcode.get_attribute("src")
             print("正在生成二维码图片...")
+            print(f"code_src:{code_src}")
             controller.driver.save_screenshot("temp_screenshot.png")
             img = Image.open("temp_screenshot.png")
             
@@ -325,8 +327,8 @@ class Wx:
                 self.controller.Close()
                 rel=True
         except Exception as e:
-            # print("浏览器未启动")
-            print(e)
+            print("浏览器未启动")
+            # print(e)
             pass
         return rel
     def Clean(self):

@@ -22,4 +22,5 @@ RUN ln -s /usr/local/bin/python3.13 /usr/local/bin/python3 \
 # 自动设置时区（如上海）
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 RUN apt update&&apt install -y --no-install-recommends firefox 
+RUN apt install  -y git
 RUN apt clean&&apt autoremove -y&&rm -rf /var/lib/apt/lists/*
