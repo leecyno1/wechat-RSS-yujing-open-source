@@ -49,15 +49,15 @@ class TaskScheduler:
         self._scheduler = BackgroundScheduler()
         self._lock = threading.Lock()
         self._jobs = {}
-        
-    def add_cron_job(self, 
-                    func: Callable,
-                    cron_expr: str,
-                    args: Optional[tuple] = None,
-                    kwargs: Optional[dict] = None,
-                    job_id: Optional[str] = None,
-                    tag:str=""
-                    ) -> str:
+
+    def add_cron_job(self,
+                     func: Callable,
+                     cron_expr: str,
+                     args: Optional[tuple] = None,
+                     kwargs: Optional[dict] = None,
+                     job_id: Optional[str] = None,
+                     tag: str = ""
+                     ) -> str:
         """
         添加一个cron定时任务
         
@@ -96,21 +96,40 @@ class TaskScheduler:
                         match = re.findall(pattern, field)
                         if match:
                             # 提取匹配的组
-                            start, end =match[0]
-                            step=random.randint(int(start),int(end))
-                            field=field.replace(f"{start}~{end}",str(step))
+                            start, end = match[0]
+                            step = random.randint(int(start), int(end))
+                            field = field.replace(f"{start}~{end}", str(step))
                     except:
                         pass
                     return field
 
-                
                 second = parse_random_field(second, 'second')
                 minute = parse_random_field(minute, 'minute')
                 hour = parse_random_field(hour, 'hour')
                 day = parse_random_field(day, 'day')
                 month = parse_random_field(month, 'month')
-                day_of_week = parse_random_field(day_of_week, 'day_of_week')
-                
+                day_of_week_original = parse_random_field(day_of_week, 'day_of_week')
+
+                def translate_day_of_week(dow_str: str) -> str:
+                    """将标准cron的星期(0=周日)转换为APScheduler的星期(0=周一)"""
+                    import re
+                    # 如果字段是 "*" 或 "?"，或者包含字母，则不处理
+                    if not re.search(r'\d', dow_str) or re.search(r'[a-zA-Z]', dow_str):
+                        return dow_str
+
+                    def replacer(match):
+                        num = int(match.group(0))
+                        if num == 0:
+                            return '6'
+                        elif num == 7:  # 标准cron的周日别名 (兼容)
+                            return '6'
+                        else:
+                            return str(num - 1)
+
+                    return re.sub(r'\d+', replacer, dow_str)
+
+                day_of_week = translate_day_of_week(day_of_week_original)
+
                 # 生成job_id
                 job_id = job_id or str(uuid.uuid4())
 
