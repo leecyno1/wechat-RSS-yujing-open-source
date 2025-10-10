@@ -222,4 +222,12 @@ http://localhost:3000
   - 默认帐号：admin
   - 默认密码：admin@123
 
+- **数据库连接串示例**
+  # 调整环境变量DB为您的数据库连接字符串。
+  # 数据库连接 例如db:  mysql+pymysql://<username>:<password>@<host>/we-rss?charset=utf8mb4
+  # PostgreSQL 连接示例: postgresql://<username>:<password>@<host>/<database>
+  # 需要注意数据库连接字符串的格式，如果是sqlite数据库，则使用sqlite:///路径的形式，如果是mysql数据库，
+  # 则使用mysql+pymysql://<username>:<password>@<host>/<database>?charset=<数据库编码>的形式
+
+  
 [Star History Chart]: https://api.star-history.com/svg?repos=rachelos/we-mp-rss&type=Timeline
