@@ -5,6 +5,8 @@
 [![Python Version](https://img.shields.io/badge/python-3.13.1+-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
+[中文](README.zh-CN.md)|[English](README.md)
+
 Quick Start
 ```
 docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
