@@ -207,7 +207,7 @@
 import translate from 'i18n-jsautotranslate'
 import { ref,watchEffect, computed, onMounted, watch, provide } from 'vue'
 import { Modal } from '@arco-design/web-vue/es/modal'
-import {getSysInfo} from '@/api/sysinfo'
+import {getSysInfo} from '@/api/sysInfo'
 const currentLanguage = ref(localStorage.getItem('language') || 'chinese_simplified');
 
 
