@@ -1,5 +1,9 @@
 import sys
-from .playwright_driver import PlaywrightController
+
+from sqlalchemy import False_
+
+import driver
+from .playwright_driver import PlaywrightController,ControlDriver
 from PIL import Image
 from .success import Success
 import time
@@ -27,22 +31,13 @@ class Wx:
     def __init__(self):
         self.lock_path=os.path.dirname(self.lock_file_path)
         self.refresh_interval=3660*24
+        self.controller=PlaywrightController()
         if not os.path.exists(self.lock_path):
             os.makedirs(self.lock_path)
         self.Clean()
         self.release_lock()
         pass
 
-    def check_dependencies(self):
-        """检查必要的依赖包"""
-        try:
-            import selenium
-            import PIL
-        except ImportError as e:
-            print("缺少必要的依赖包，请先安装：")
-            print("pip install selenium Pillow")
-            return False
-        return True
     def GetHasCode(self):
         if os.path.exists(self.wx_login_url):
             return True
@@ -114,38 +109,66 @@ class Wx:
     def schedule_refresh(self):
         if self.refresh_interval <= 0:
             return
-        is_logged_in = False
+            
         with self._login_lock:
-            is_logged_in = self.HasLogin
-        if is_logged_in:
-            try:
-                self.refresh_task()
-                Timer(self.refresh_interval, self.schedule_refresh).start()
-            except Exception as e:
-                raise Exception(f"浏览器已经关闭")
-    def Token(self,CallBack=None):
-        try:
-            self.CallBack=CallBack
-            if getStatus()==False:
+            if not self.HasLogin or not hasattr(self, 'controller') or self.controller is None:
                 return
-            if 'controller' not in locals():
-                controller = PlaywrightController()
-                self.controller=controller
+                
+        try:
+            self.refresh_task()
+            # 使用守护线程避免资源泄露
+            timer = Timer(self.refresh_interval, self.schedule_refresh)
+            timer.daemon = True
+            timer.start()
+        except Exception as e:
+            print_error(f"定时刷新任务失败: {str(e)}")
+            # 不再抛出异常，避免无限循环
+    def Token(self, CallBack=None):
+        try:
+            self.CallBack = CallBack
+            if not getStatus():
+                print_warning("登录状态检查失败")
+                return None
+                
+                
             from driver.token import wx_cfg
-            token=str(wx_cfg.get("token", ""))
-            self.controller.start_browser()
-            self.controller.open_url(f"{self.WX_HOME}?t=home/index&lang=zh_CN&token={token}")
-            cookie=Store.load()
-            self.controller.add_cookies(cookie)
-            self.controller.add_cookie({"name":"token","value":token})
-
-            qrcode = self.controller.page.locator("#jumpUrl")
-            qrcode.wait_for(state="visible", timeout=self.wait_time*1000)
+            token = str(wx_cfg.get("token", ""))
+            if not token:
+                print_warning("未找到有效的token")
+                return None
+            driver=self.controller
+            driver.start_browser()    
+            driver.open_url(f"{self.WX_HOME}?t=home/index&lang=zh_CN&token={token}")
+            
+            cookie = Store.load()
+            if cookie:
+                # 为每个cookie添加必要的domain字段
+                for c in cookie:
+                    if 'domain' not in c:
+                        c['domain'] = '.weixin.qq.com'
+                    if 'path' not in c:
+                        c['path'] = '/'
+                driver.add_cookies(cookie)
+            # 为单个token cookie添加必要的字段
+            token_cookie = {
+                "name": "token", 
+                "value": token,
+                "domain": ".weixin.qq.com",
+                "path": "/"
+            }
+            driver.add_cookie(token_cookie)
+            page=driver.page
+            qrcode = page.locator("#jumpUrl")
+            qrcode.wait_for(state="visible", timeout=self.wait_time * 1000)
             qrcode.click()
             time.sleep(2)
-            self.Call_Success()
+            return self.Call_Success()
+        except ImportError as e:
+            print_error(f"导入模块失败: {str(e)}")
+            return None
         except Exception as e:
-            print_error(f"未登录{str(e)}")
+            print_error(f"Token操作失败: {str(e)}")
+            return None
         finally:
             self.Close()
     def isLock(self):             
@@ -157,7 +180,7 @@ class Wx:
                 except Exception as e:
                     print(f"二维码图片获取失败: {str(e)}")
         return self.isLock
-    def wxLogin(self,CallBack=None,NeedExit=False):
+    def wxLogin(self, CallBack=None, NeedExit=False):
         """
         微信公众平台登录流程：
         1. 检查依赖和环境
@@ -167,45 +190,51 @@ class Wx:
         5. 获取登录后的cookie和token
         6. 启动定时刷新线程(默认30分钟刷新一次)
         """
-        # 检查依赖
-        if not self.check_dependencies():
-            return None
-        
-        try:
-            if  self.check_lock():
-                return "微信公众平台登录脚本正在运行，请勿重复运行！"
-            self.set_lock()
-            with self._login_lock:
-                self.HasLogin=False
-            self.Clean()
-            self.Close()
-            # 初始化浏览器控制器
-            controller = PlaywrightController()
-            self.controller=controller
-            # 启动浏览器并打开微信公众平台
-            print("正在启动浏览器...")
-            controller.start_browser()
-            controller.open_url(self.WX_LOGIN)
             
+        # 使用上下文管理器确保资源清理
+        try:
+            if self.check_lock():
+                print_warning("微信公众平台登录脚本正在运行，请勿重复运行")
+                return None
+                
+            self.set_lock()
+            
+            with self._login_lock:
+                self.HasLogin = False
+                
+            # 清理现有资源
+            self.cleanup_resources()
+            
+            # 初始化浏览器控制器
+            driver=self.controller
+            # 启动浏览器并打开微信公众平台
+            print_info("正在启动浏览器...")
+            driver.start_browser(anti_crawler=False,browser_name="")
+            driver.open_url(self.WX_LOGIN)
+            page=driver.page
+
+            # from playwright.sync_api import sync_playwright
+            # playwright=sync_playwright().start()
+            # browser = playwright.chromium.launch()
+            # context = browser.new_context()
+            # page = context.new_page()
+            # page.goto(self.WX_LOGIN)
             # 等待页面完全加载
-            print("正在加载登录页面...")
-            # 等待登录后首页完全加载
-            self.controller.page.wait_for_load_state("networkidle")
-            time.sleep(2)
+            print_info("正在加载登录页面...")
+            page.wait_for_load_state("networkidle")
             
             # 定位二维码区域
-            qrcode = self.controller.page.locator(".login__type__container__scan__qrcode")
-            # 确保二维码可见
-            qrcode.wait_for(state="visible", timeout=self.wait_time*1000)
-            
+            qr_tag=".login__type__container__scan__qrcode"
             # 获取二维码图片URL
-            code_src = qrcode.get_attribute("src")
+            qrcode = page.query_selector(qr_tag)
+            code_src=qrcode.get_attribute("src")
             print("正在生成二维码图片...")
             print(f"code_src:{code_src}")
-            
-            # 使用Playwright截图功能
+            # qrcode = page.query_selector(qr_tag)
+           
+            # 使用Playwright截图功能（添加异常处理）
             qrcode.screenshot(path=self.wx_login_url)
-            
+
             print("二维码已保存为 wx_qrcode.png，请扫码登录...")
             self.HasCode=True
             if os.path.getsize(self.wx_login_url)<=364:
@@ -214,33 +243,29 @@ class Wx:
             print("等待扫码登录...")
             if self.Notice is not None:
                 self.Notice()
-            # 等待页面跳转到首页
-            self.controller.page.wait_for_url(f"{self.WX_HOME}*", timeout=120000)
-            print("登录成功，正在获取cookie和token...")
+           
+            # # 监听页面导航事件
+            def handle_frame_navigated(frame):
+                current_url = frame.url
+                if self.WX_HOME in current_url:
+                    print(f"登录成功，正在获取cookie和token...")
+            page.on('framenavigated', handle_frame_navigated)
+            page.wait_for_event("framenavigated")
+           
             from .success import setStatus
             with self._login_lock:
                 self.HasLogin=True
             setStatus(True)
-            time.sleep(3)
             self.CallBack=CallBack
             self.Call_Success()
-            time.sleep(10)
-        except NameError as e:
-            # 修正此处，确保异常处理逻辑正确
-            print_error(f"\n错误发生: {str(e)}")
-            self.SESSION = None  # 发生错误时设置 SESSION 为 None
-            return self.SESSION  # 异常处理后不需要返回
         except Exception as e:
             print(f"\n错误发生: {str(e)}")
-            print("可能的原因:\n1. 请确保已安装Firefox浏览器\n2. 请确保geckodriver已下载并配置到PATH中\n3. 检查网络连接是否可以访问微信公众平台")
             self.SESSION=None
-            self.Clean()
-            self.Close()
+            return self.SESSION
         finally:
             self.release_lock()
             if 'controller' in locals() and NeedExit:
                 self.Clean()
-                self.Close()
             else:
                 pass
         return self.SESSION
@@ -261,45 +286,31 @@ class Wx:
                 'expiry': cookie_expiry
             }
     def Call_Success(self):
+        """处理登录成功后的回调逻辑"""
+        if not hasattr(self, 'controller') or self.controller is None:
+            print_error("浏览器控制器未初始化")
+            return None
+            
         # 获取token
         token = self.extract_token_from_requests()
-        driver =self.controller.driver
+        
         try:
-            # 获取公众号名称
-            wx_app_name=driver.find_element(By.XPATH,'/html/body/div[1]/div/div[4]/div/div/div[2]/div[2]/div[1]/div[1]/div/div[1]/div').text
-            # 获取公众号头像
-            wx_logo=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[1]/img').get_attribute("src")
-            #昨日阅读(次)
-            wx_read_yesterday=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[1]/em').text
-            #昨日分享(次)
-            wx_share_yesterday=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[2]/em').text
-            #昨日新增关注(人)
-            wx_watch_yesterday=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[2]/div/ul/li[3]/em/a/span').text
-            #原创内容
-            wx_yuan_count=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[2]/div/span').text
-            #总用户数
-            wx_user_count=driver.find_element(By.XPATH,'//*[@id="app"]/div[2]/div[1]/div[1]/div/div[3]/div/span').text
-            self.ext_data={"wx_app_name":wx_app_name,
-                        "wx_logo":wx_logo,
-                        "wx_read_yesterday":wx_read_yesterday,
-                        "wx_share_yesterday":wx_share_yesterday,
-                        "wx_watch_yesterday":wx_watch_yesterday,
-                        "wx_yuan_count":wx_yuan_count,
-                        "wx_user_count":wx_user_count}
+            # 使用更健壮的选择器定位元素
+            self.ext_data = self._extract_wechat_data()
         except Exception as e:
             print_error(f"获取公众号信息失败: {str(e)}")
-            self.ext_data=None
+            self.ext_data = None
 
         # 获取当前所有cookie
-        cookies = self.controller.driver.get_cookies()
+        cookies = self.controller.get_cookies()
         # print("\n获取到的Cookie:")
         self.SESSION=self.format_token(cookies,token)
         with self._login_lock:
             self.HasLogin=False if self.SESSION["expiry"] is None else True
         self.Clean()
         if  self.HasLogin:
-            print_success("登录成功！")
             Store.save(cookies)
+            print_success("登录成功！")
         else:
             print_warning("未登录！")
         
@@ -308,11 +319,57 @@ class Wx:
             self.CallBack(self.SESSION,self.ext_data)
 
         return self.SESSION 
+
+    def _extract_wechat_data(self):
+        """提取微信公众号数据，使用更健壮的选择器"""
+        driver = self.controller.driver
+        data = {}
+        
+        # 使用更具体的选择器避免XPath过于脆弱
+        selectors = {
+            "wx_app_name": ".account-name",
+            "wx_logo": ".account-avatar img",
+            "wx_read_yesterday": ".data-item:nth-child(1) .number",
+            "wx_share_yesterday": ".data-item:nth-child(2) .number", 
+            "wx_watch_yesterday": ".data-item:nth-child(3) .number",
+            "wx_yuan_count": ".original-count .number",
+            "wx_user_count": ".user-count .number"
+        }
+        
+        for key, selector in selectors.items():
+            try:
+                element = driver.find_element(By.CSS_SELECTOR, selector)
+                if key == "wx_logo":
+                    data[key] = element.get_attribute("src")
+                else:
+                    data[key] = element.text
+            except Exception as e:
+                print_warning(f"获取{key}失败: {str(e)}")
+                data[key] = ""
+                
+        return data
     
+    def cleanup_resources(self):
+        """清理所有相关资源"""
+        try:
+            # 清理临时文件
+            self.Clean()
+                
+            # 重置状态
+            with self._login_lock:
+                self.HasLogin = False
+                self.HasCode = False
+                
+            print_info("资源清理完成")
+            return True
+        except Exception as e:
+            return False
+            
     def Close(self):
         rel=False
         try:
-                self.controller.Close()
+            if hasattr(self, 'controller') and self.controller is not None:
+                self.controller.cleanup()
                 rel=True
         except Exception as e:
             print("浏览器未启动")

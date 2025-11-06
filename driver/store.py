@@ -4,7 +4,7 @@ import json
 class KeyStore:
     key_file= "data/key.lic"
     def __init__(self):
-        self.store = FileCrypto(cfg.get("safe.lic_key",None))
+        self.store = FileCrypto(cfg.get("safe.lic_key","store.csol.store.werss"))
     def save(self,text):
         items=[]
         if type(text) != str:

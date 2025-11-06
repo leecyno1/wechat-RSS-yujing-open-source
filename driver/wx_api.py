@@ -256,15 +256,16 @@ class WeChatAPI:
         """
         uuid=self._generate_uuid()
         self.session.cookies.set("uuid",uuid)
+        token=self.session.cookies.get("token","")
         url=f"{self.base_url}/cgi-bin/bizlogin?action=startlogin"
         fingerprint=self._generate_uuid()
         data={
             "fingerprint": fingerprint,
-            "token": "1788989385",
+            "token": token,
             "lang": "zh_CN",
             "f": "json",
             "ajax": "1",
-            "redirect_url": "/cgi-bin/settingpage?t=setting/index&amp;action=index&amp;token=1788989385&amp;lang=zh_CN",
+            "redirect_url": f"/cgi-bin/settingpage?t=setting/index&amp;action=index&amp;token={token}&amp;lang=zh_CN",
             "login_type": "3",
         }
         response=self.session.post(url,data=data)
@@ -377,6 +378,9 @@ class WeChatAPI:
                     # 二维码过期
                     if self.notice_callback:
                         self.notice_callback('二维码已过期，请重新获取')
+                    return
+                elif status == 'exists':
+                    return
                 else:
                     # 继续检查
                     Timer(2.0, check_login).start()
@@ -401,6 +405,8 @@ class WeChatAPI:
             登录状态: 'waiting', 'scanned', 'success', 'expired', 'error'
         """
         try:
+            if not os.path.exists(self.qr_code_path):
+                return "not_exists"
             check_url=f"{self.base_url}/cgi-bin/scanloginqrcode"
             self.fingerprint=self.cookies.get("fingerprint")
             params = {
@@ -795,6 +801,11 @@ class WeChatAPI:
 
 
     def GetCode(self,CallBack=None,Notice=None):
+        if self.GetHasCode():
+            return {
+                "code":f"/{self.wx_login_url}?t={(time.time())}",
+                "is_exists":self.GetHasCode(),
+            }
         from core.print import print_warning
         from core.thread import ThreadManager
         self.thread = ThreadManager(target=self.get_qr_code,args=(CallBack,Notice))  # 传入函数名
@@ -810,7 +821,7 @@ class WeChatAPI:
         return False
     
     def HasLogin(self):
-        return self.login_with_token()
+        return self.login_with_token() and not self.GetHasCode()
     def Close(self):
         pass
 # 创建全局实例

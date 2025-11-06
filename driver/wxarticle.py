@@ -1,3 +1,5 @@
+import random
+from socket import timeout
 from .playwright_driver import PlaywrightController
 from typing import Dict
 from core.print import print_error,print_info,print_success,print_warning
@@ -17,7 +19,7 @@ class WXArticleFetcher:
         wait_timeout: 显式等待超时时间(秒)
     """
     
-    def __init__(self, wait_timeout: int = 1):
+    def __init__(self, wait_timeout: int = 10000):
         """初始化文章获取器"""
         self.wait_timeout = wait_timeout
         self.controller = PlaywrightController()
@@ -104,7 +106,7 @@ class WXArticleFetcher:
             biz_match = re.search(r'window\.__biz=([^&]+)', page_source)
             if biz_match:
                 return biz_match.group(1)
-                
+            # biz_match=page.evaluate('() =>window.biz')
             return ""
             
         except Exception as e:
@@ -245,10 +247,7 @@ class WXArticleFetcher:
                 }
             }
         self.controller.start_browser(mobile_mode=False,dis_image=False)
-        # 清除所有 cookie 等信息
-        if self.controller.context:
-            self.controller.context.clear_cookies()
-        self.controller.open_url("about:blank")
+       
         self.page = self.controller.page
         print_warning(f"Get:{url} Wait:{self.wait_timeout}")
         self.controller.open_url(url)
@@ -258,7 +257,8 @@ class WXArticleFetcher:
         try:
             # 等待页面加载
             # page.wait_for_load_state("networkidle")
-            body = page.evaluate('() => document.body.innerText')
+            # body = page.evaluate('() => document.body.innerText')
+            body= page.locator("body").text_content().strip()
             
             info["content"]=body
             if "当前环境异常，完成验证后即可继续访问" in body:
@@ -266,6 +266,8 @@ class WXArticleFetcher:
                 # try:
                 #     page.locator("#js_verify").click()
                 # except:
+                self.controller.cleanup()
+                time.sleep(5)
                 raise Exception("当前环境异常，完成验证后即可继续访问")
             if "该内容已被发布者删除" in body or "The content has been deleted by the author." in body:
                 info["content"]="DELETED"
@@ -287,65 +289,57 @@ class WXArticleFetcher:
                 raise Exception("违规无法查看")
             
 
-            try:
-                # 等待页面加载完成，并查找 meta[property="og:title"]
-                og_title = page.locator('meta[property="og:title"]')
-                
-                # 获取属性值
-                title = og_title.get_attribute("content")
-                self.export_to_pdf(f"./data/{title}.pdf")
-            except:
-                title=""
-                pass
-            try:
-                title = page.evaluate('() => document.title')
-            except:
-                pass
-            
+            # 获取标题
+            title = page.locator('meta[property="og:title"]').get_attribute("content")
             #获取作者
-            try:
-                author = page.locator("#meta_content .rich_media_meta_text").text_content().strip()
-            except:
-                author=""
-                pass
+            author = page.locator('meta[property="og:article:author"]').get_attribute("content")
+            #获取描述
+            description = page.locator('meta[property="og:description"]').get_attribute("content")
+            #获取题图
+            topic_image = page.locator('meta[property="twitter:image"]').get_attribute("content")
 
-            #获取发布时间
+            self.export_to_pdf(f"./data/{title}.pdf")
+            if title=="":
+                title = page.evaluate('() => document.title')
+            
+          
+         
+            # 获取正文内容和图片
+            content_element = page.locator("#js_content")
+            content = content_element.inner_html()
+
+            #获取图集内容 
+            if content=="":
+                content_element = page.locator("#js_article")
+                content = content_element.inner_html()
+                content=self.clean_article_content(str(content))
+            #获取图像资源
+            images = [
+                img.get_attribute("data-src") or img.get_attribute("src")
+                for img in content_element.locator("img").all()
+                if img.get_attribute("data-src") or img.get_attribute("src")
+            ]
+            images=[]
+            if images and len(images)>0:
+                info["pic_url"]=images[0]
+
+
             try:
+
+                #获取发布时间
                 publish_time_str = page.locator("#publish_time").text_content().strip()
                 # 将发布时间转换为时间戳
                 publish_time = self.convert_publish_time_to_timestamp(publish_time_str)
             except:
+                print_warning(f"获取作者和发布时间失败: {e}")
                 publish_time=""
-                pass
-         
-            # 获取正文内容和图片
-            try:
-                content_element = page.locator("#js_content")
-                content = content_element.inner_html()
-            except:
-                pass
-
-            #获取图集内容 
-            try:
-                content_element = page.locator("#js_article")
-                content = content_element.inner_html()
-                content=self.clean_article_content(str(content))
-          
-                images = [
-                    img.get_attribute("data-src") or img.get_attribute("src")
-                    for img in content_element.locator("img").all()
-                    if img.get_attribute("data-src") or img.get_attribute("src")
-                ]
-            except:
-                images=[]
-                pass
-            if images and len(images)>0:
-                info["pic_url"]=images[0]
             info["title"]=title
-            info["author"]=author
             info["publish_time"]=publish_time
             info["content"]=content
             info["images"]=images
+            info["author"]=author
+            info["description"]=description
+            info["topic_image"]=topic_image
 
         except Exception as e:
             print_error(f"文章内容获取失败: {str(e)}")
@@ -362,10 +356,11 @@ class WXArticleFetcher:
 
             # 获取公众号名称
             title = page.evaluate('() => $("#js_wx_follow_nickname").text()')
+            biz = page.evaluate('() => window.biz')
             info["mp_info"]={
                 "mp_name":title,
                 "logo":logo_src,
-                "biz": self.extract_biz_from_source(url, page), 
+                "biz": biz or self.extract_biz_from_source(url, page), 
             }
             info["mp_id"]= "MP_WXS_"+base64.b64decode(info["mp_info"]["biz"]).decode("utf-8")
         except Exception as e:
@@ -403,8 +398,6 @@ class WXArticleFetcher:
                 import os
                 pdf_path=cfg.get("export.pdf.dir","./data/pdf")
                 output_path=os.path.abspath(f"{pdf_path}/{title}.pdf")
-                self.driver.execute_script(f"window.print({{'printBackground': true, 'destination': 'save-as-pdf', 'outputPath': '{output_path}'}});")
-                time.sleep(3)
             print_success(f"PDF 文件已生成{output_path}")
         except Exception as e:
             print_error(f"生成 PDF 失败: {str(e)}")
@@ -413,13 +406,7 @@ class WXArticleFetcher:
     def clean_article_content(self,html_content: str):
         from tools.html import htmltools
         return htmltools.clean_html(str(html_content),
-                                 remove_ids=[
-                                     "js_tags_preview_toast","wx_stream_article_slide_tip","js_pc_weapp_code","wx_expand_slidetip","js_alert_panel","js_emotion_panel_pc","js_product_dialog","js_analyze_btn","js_jump_wx_qrcode_dialog","js_extra_content","js_article_bottom_bar","img_list_indicator_wrp","img_list_indicator"
-                                     ],
-                                 remove_classes=[
-                                     "weui-dialog__btn","wx_expand_bottom","weui-dialog","hidden","weui-a11y_ref","reward_dialog","reward_area_carry_whisper","bottom_bar_interaction_wrp"
-                                     ]
-                                 ,remove_selectors=[
+                                 remove_selectors=[
                                      "link",
                                      "head",
                                      "script"
