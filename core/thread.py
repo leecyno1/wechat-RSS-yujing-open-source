@@ -37,9 +37,8 @@ class ThreadManager(threading.Thread):
     def run(self):
         """线程运行逻辑"""
         try:
-            # while not self._stop_event.is_set() and not self._force_stop:
-                if self._target:
-                    self._target(*self._args, **self._kwargs)
+            if self._target:
+                self._target(*self._args, **self._kwargs)
         except Exception as e:
             print(f"线程 {self.name} 发生异常: {e}")
         finally:

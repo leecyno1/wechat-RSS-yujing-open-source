@@ -28,16 +28,16 @@ def setLoginInfo(info):
     with login_lock:
         WX_LOGIN_INFO=info
 
-def Success(data:any,ext_data:any=None):
+def Success(data:dict,ext_data:dict={}):
     if data != None:
             # print("\n登录结果:")
             setLoginInfo(data)
-            setStatus(True)
-            if ext_data is not None:
+            if ext_data is not {}:
                 print_success(f"名称：{ext_data['wx_app_name']}")
             if data['expiry'] !=None:
                 print_success(f"有效时间: {data['expiry']['expiry_time']} (剩余秒数: {data['expiry']['remaining_seconds']}) Token: {data['token']}")
                 set_token(data,ext_data)
+                setStatus(True)
             else:
                 print_warning("登录失败，请检查上述错误信息")
                 setStatus(False)

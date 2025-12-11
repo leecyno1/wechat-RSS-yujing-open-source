@@ -93,9 +93,10 @@ class Wx:
         self.Clean()
         print("子线程执行中")
         from core.thread import ThreadManager
-        self.thread = ThreadManager(target=self.wxLogin,args=(CallBack,True))  # 传入函数名
+        self.thread = ThreadManager(target=self.wxLogin,args=(CallBack,False))  # 传入函数名
         self.thread.start()  # 启动线程
-        print("微信公众平台登录 v1.34")
+        from core.ver import VERSION
+        print(f"微信公众平台登录 v{VERSION}")
         return WX_API.QRcode()
     
     wait_time=1
@@ -114,7 +115,8 @@ class Wx:
                 raise Exception(f"登录已经失效，请重新登录")
         except Exception as e:
             raise Exception(f"浏览器关闭")  # 重新抛出异常以便外部捕获处理
-
+    def HasLogin(self):
+        return self.HasLogin
     def schedule_refresh(self):
         if self.refresh_interval <= 0:
             return
@@ -183,6 +185,7 @@ class Wx:
             return None
         finally:
             # 不在这里清理，让Call_Success处理清理
+            self.controller.cleanup()
             pass
     def isLock(self):             
         if self.isLock:
@@ -264,7 +267,7 @@ class Wx:
                 if self.WX_HOME in current_url:
                     print(f"登录成功，正在获取cookie和token...")
             page.on('framenavigated', handle_frame_navigated)
-            page.wait_for_event("framenavigated")
+            page.wait_for_event("framenavigated", timeout=60 * 1000)
            
             from .success import setStatus
             with self._login_lock:
@@ -273,15 +276,18 @@ class Wx:
             self.CallBack=CallBack
             self.Call_Success()
         except Exception as e:
-            print(f"\n错误发生: {str(e)}")
+            if "Timeout" in str(e):
+                print_warning("\n扫码登录超时，请重新运行程序进行扫码登录")
+            else:
+                print_error(f"\n错误发生: {str(e)}")
             self.SESSION=None
             return self.SESSION
         finally:
             self.release_lock()
-            if 'controller' in locals() and NeedExit:
+            # 只有在NeedExit为True且未登录成功时才清理资源
+            if NeedExit and 'controller' in locals() and not self.HasLogin:
+                self.controller.cleanup()
                 self.Clean()
-            else:
-                pass
         return self.SESSION
     def format_token(self,cookies:any,token=""):
         cookies_str=""
@@ -314,7 +320,7 @@ class Wx:
         self.SESSION=self.format_token(cookies,str(token))
         with self._login_lock:
             self.HasLogin=False if self.SESSION["expiry"] is None else True
-        self.Clean()
+        # 登录成功后不立即清理二维码，保持浏览器运行
         if  self.HasLogin:
             try:
             # 使用更健壮的选择器定位元素

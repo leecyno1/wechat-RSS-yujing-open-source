@@ -1,6 +1,4 @@
 #!/bin/bash
-
-
 plantform="$(uname -m)"
 plant=/app/data/venv_$plantform
 python3 -m venv $plant
@@ -83,4 +81,12 @@ if [ -f "requirements.txt" ]; then
         echo $CURRENT_MD5 > $OLD_MD5_FILE
     fi
 fi 
-# playwright install $BROWSER_TYPE --with-deps
+
+INSTALL=${INSTALL:-"True"}
+# 根据环境变量决定是否安装浏览器
+if [ "$INSTALL" = "False" ]; then
+    echo "INSTALL环境变量为True，开始安装playwright浏览器..."
+    playwright install $BROWSER_TYPE --with-deps
+else
+    echo "INSTALL环境变量不为True，跳过playwright浏览器安装"
+fi

@@ -6,8 +6,9 @@ from string import Template
 from core.print import print_warning, print_error,print_info
 from .file import FileCrypto
 class Config: 
-    config_path=None
+    config_path=""
     config={}
+    _config_cache = None  # 添加缓存变量
     def __init__(self, config_path=None, encrypt=False):
         self.args = self.parse_args()
         self.config_path = config_path or self.args.config
@@ -74,10 +75,11 @@ class Config:
                     raise
                 # 加密整个YAML内容
                 encrypted_content = self._encrypt(yaml_content)
-                os.remove(self.config_path)
+                # 直接写入临时文件，然后重命名（Windows下更安全的替换方式）
                 with open(self.config_path, 'w', encoding='utf-8') as f:
                     f.write(encrypted_content)
                 self.reload()
+             
         except Exception as e:
             print_error(f"保存配置文件失败: {e}")
             raise
@@ -100,6 +102,10 @@ class Config:
                     return data
             return data
     def get_config(self):
+        # 如果有缓存，直接返回缓存
+        if self._config_cache is not None:
+            return self._config_cache
+            
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -116,16 +122,19 @@ class Config:
                     config = yaml.safe_load(content)
                 
                 if config is None:
-                    return {}
+                    config = {}
                 
                 self.config = config
                 self._config = self.replace_env_vars(config)
+               
                 return self.config
         except Exception as e:
             print_error(f"加载配置文件 {self.config_path} 错误: {e}")
             # sys.exit(1)
     def reload(self):
         self.config=self.get_config()
+         # 更新缓存
+        self._config_cache = self._config
     def set(self,key,default:any=None):
         self.config[key] = default
         self.save_config()

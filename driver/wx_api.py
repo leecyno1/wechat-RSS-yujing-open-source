@@ -3,6 +3,7 @@
 基于 https://github.com/wechat-article/wechat-article-exporter 项目实现
 提供二维码登录、token管理、cookie管理等功能
 """
+from ast import Call
 import os
 # import traceback
 import time
@@ -17,6 +18,8 @@ import qrcode
 from io import BytesIO
 
 from sqlalchemy import true
+
+from core.print import print_warning
 from .token import get as get_token,set_token
 import logging
 # 配置日志
@@ -45,7 +48,7 @@ class WeChatAPI:
         self._lock = Lock()
         
         # 回调函数
-        self.login_callback = None
+        self.login_callback :Optional[Callable] = None
         self.notice_callback = None
         
         # 确保静态目录存在
@@ -305,7 +308,7 @@ class WeChatAPI:
             UUID字符串
         """
         import uuid
-        return str(uuid.uuid4())
+        return str(uuid.uuid4()).replace('-', '')
     
     def _generate_qr_image(self, qr_url: str):
         """
@@ -452,31 +455,20 @@ class WeChatAPI:
         处理登录成功
         """
         try:
-            with self._lock:
-                self.is_logged_in = True
-                
-                # 获取token和cookies
-                self._extract_login_info()
-                
-                # 清理二维码文件
-                self._clean_qr_code()
-                from driver.cookies import expire
-                # 调用成功回调
-                if self.login_callback:
-                    login_data = {
-                        'cookies': self.cookies,
-                        'cookies_str': self._format_cookies_string(),
-                        'token': self.token,
-                        'wx_login_url': self.qr_code_path,
-                        'expiry':  expire(self.cookies_dict)
-                    }
-                self._get_account_info()
-                logger.info("登录成功！")
+            self.is_logged_in = True
+            
+            # 获取token和cookies
+            self._extract_login_info()
+            
+            # 清理二维码文件
+            self._clean_qr_code()
+            from driver.cookies import expire
+            # 调用成功回调
+            self._get_account_info()
+            logger.info("登录成功！")
                 
         except Exception as e:
             logger.error(f"处理登录失败: {str(e)}")
-            traceback.print_exc()
-
     def _extract_login_info(self):
         """
         提取登录信息（token和cookies）
@@ -658,7 +650,7 @@ class WeChatAPI:
                 
             # 构建请求URL
             url = f"{self.base_url}/cgi-bin/switchacct"
-            
+            self.fingerprint=self.cookies.get("fingerprint")
             # 设置请求参数
             params = {
                 'action': 'get_acct_list',
@@ -668,7 +660,6 @@ class WeChatAPI:
                 'f': 'json',
                 'ajax': '1'
             }
-            
             # 设置请求头
             headers = {
                 'accept': '*/*',
@@ -684,7 +675,7 @@ class WeChatAPI:
             
             # 设置referrer
             referrer = f"{self.base_url}/cgi-bin/home?t=home/index&lang=zh_CN&token={self.token}"
-            headers['referer'] = referrer
+            headers['Referer'] = referrer
             
             # 发送GET请求
             response = self.session.get(url, params=params, headers=headers)
@@ -739,15 +730,14 @@ class WeChatAPI:
                 # 验证登录状态
                 response = self.session.get(f"{self.home_url}?token={token}")
                 response.raise_for_status()
-                
+                if token=="" or token is None:
+                    print_warning("未登录，请扫码")
+                    return False
                
-                if 'home' in response.url:
+                if 'home'  in response.url:
                     self.is_logged_in = True
-                    ext_data=self._get_account_info()
-                    if ext_data is None:
-                        logger.warning("Token登录失败")
-                        return False
                     logger.info("Token登录成功")
+                    self._handle_login_success()
                     return True
                 else:
                     logger.warning("Token登录失败")
@@ -802,7 +792,13 @@ class WeChatAPI:
         }
 
 
-
+    def Token(self,callback:Optional[Callable] = None):
+        self.login_callback=callback
+        rel= self.login_with_token()
+        if rel==False:
+            print_warning("未登录，Token登录失败")
+        return rel
+            
     def GetCode(self,CallBack=None,Notice=None):
         if self.GetHasCode():
             return {
@@ -813,7 +809,8 @@ class WeChatAPI:
         from core.thread import ThreadManager
         self.thread = ThreadManager(target=self.get_qr_code,args=(CallBack,Notice))  # 传入函数名
         self.thread.start()  # 启动线程
-        print("微信公众平台登录 v1.34")
+        from core.ver import VERSION
+        print(f"微信公众平台登录 v{VERSION}")
         return {
             "code":f"/{self.wx_login_url}?t={(time.time())}",
             "is_exists":self.GetHasCode(),

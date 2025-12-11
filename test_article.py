@@ -1,4 +1,6 @@
 from os import remove
+
+from sqlalchemy import false
 from driver.wxarticle import Web
 from driver.success import Success
 from driver.base import WX_API
@@ -61,15 +63,17 @@ def testToken():
     from driver.auth import auth
     auth()
     # input("按任意键退出")
-
+def testCheckAuth():
+    from driver.auth import auth
+    input("按任意键退出")
 def testLogin():
-    from driver.wx import WX_API
+    from driver.base import WX_API
     from driver.success import Success
-    de_url=WX_API.Token(Success)
-    # de_url=WX_API.GetCode(Success)
-    # de_url=WX_API.wxLogin()
-    print(de_url)
-    # input("按任意键退出")
+    rel=WX_API.Token(Success)
+    if rel==False:
+        de_url=WX_API.GetCode(Success)
+        print(de_url)
+        input("按任意键退出")
 def testNotice():
     from jobs.notice import sys_notice
     text="""
@@ -153,7 +157,8 @@ if __name__=="__main__":
     # testWeb()
     # testNotice()
     # testMd2Doc()
-    testToken()
-    # testLogin()
+    # testToken()
+    # testCheckAuth()
+    testLogin()
     # testToken()  # 注释掉避免线程冲突
     # testMarkDown()
