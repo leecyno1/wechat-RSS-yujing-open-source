@@ -6,7 +6,7 @@ def auth():
     WX_API.Token(callback=Success)
 if os.getenv('WE_RSS.AUTH',False):
     auth_task=TaskScheduler()
-    if os.getenv('DEBUG',True):
+    if os.getenv('DEBUG',False):
         auth_task.add_cron_job(auth, "*/1 * * * *",tag="授权定时更新")
     else:
         auth_task.add_cron_job(auth, "0 */1 * * *",tag="授权定时更新")

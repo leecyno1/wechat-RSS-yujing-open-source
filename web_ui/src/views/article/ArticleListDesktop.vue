@@ -121,7 +121,7 @@
             fixed: true,
             checkStrictly: true,
             onlyCurrent: false
-          }" row-key="id" @page-change="handlePageChange" v-model:selectedKeys="selectedRowKeys">
+          }" row-key="id" @page-change="handlePageChange" @page-size-change="handlePageSizeChange" v-model:selectedKeys="selectedRowKeys">
             <template #status="{ record }">
               <a-tag :color="statusColorMap[record.status]">
                 {{ statusTextMap[record.status] }}
@@ -219,7 +219,7 @@ const pagination = ref({
   showTotal: true,
   showJumper: true,
   showPageSize: true,
-  pageSizeOptions: [10]
+  pageSizeOptions: [10, 20, 50, 100]
 })
 
 const statusTextMap = {
@@ -338,10 +338,17 @@ const fetchArticles = async () => {
   }
 }
 
-const handlePageChange = (page: number, pageSize: number, type?: string) => {
-  console.log('分页事件触发:', { page, pageSize, type })
+const handlePageChange = (page: number, pageSize: number) => {
+  console.log('分页事件触发:', { page, pageSize })
   pagination.value.current = page
   pagination.value.pageSize = pageSize
+  fetchArticles()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  console.log('页面大小改变:', { pageSize })
+  pagination.value.pageSize = pageSize
+  pagination.value.current = 1 // 切换页面大小时重置到第一页
   fetchArticles()
 }
 
