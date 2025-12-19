@@ -111,9 +111,6 @@ class WxGather:
             if r.status_code == 200:
                 text = r.text
                 text=self.remove_common_html_elements(text)
-                if "当前环境异常，完成验证后即可继续访问" in text:
-                    Wait(tips="当前环境异常，完成验证后即可继续访问")
-                    text=""
         except:
             pass
         return text
@@ -271,7 +268,11 @@ class WxGather:
 
 
     def remove_common_html_elements(self, html_content: str) -> str:
-        html_content=Web.clean_article_content(html_content)
+        if "当前环境异常，完成验证后即可继续访问" in html_content:
+                Wait(tips="当前环境异常，完成验证后即可继续访问")
+                html_content=""
+        else:
+            html_content=Web.clean_article_content(html_content)
         return html_content
 
     # 更新公众号更新状态

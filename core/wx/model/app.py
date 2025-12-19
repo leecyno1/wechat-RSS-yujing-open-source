@@ -14,28 +14,7 @@ class MpsAppMsg(WxGather):
     # 重写 content_extract 方法
     def content_extract(self,  url):
         try:
-            text = super().content_extract(url)
-            if text is not None:
-                soup = BeautifulSoup(text, 'html.parser')
-                # 找到内容
-                js_content_div = soup.find('div', {'id': 'js_content'})
-                # 移除style属性中的visibility: hidden;
-                if js_content_div is None:
-                    return ""
-                js_content_div.attrs.pop('style', None)
-                # 找到所有的img标签
-                img_tags = js_content_div.find_all('img')
-                # 遍历每个img标签并修改属性，设置宽度为1080p
-                for img_tag in img_tags:
-                    if 'data-src' in img_tag.attrs:
-                        img_tag['src'] = img_tag['data-src']
-                        del img_tag['data-src']
-                    if 'style' in img_tag.attrs:
-                        style = img_tag['style']
-                        # 使用正则表达式替换width属性
-                        style = re.sub(r'width\s*:\s*\d+\s*px', 'width: 1080px', style)
-                        img_tag['style'] = style
-                return  js_content_div.prettify()
+           return super().content_extract(url)
         except Exception as e:
                 logger.error(e)
         return ""

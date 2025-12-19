@@ -112,7 +112,7 @@ import { ref, onMounted } from 'vue'
 import { getArticles, getArticleDetail } from '@/api/article'
 import { getSubscriptions } from '@/api/subscription'
 import { Message } from '@arco-design/web-vue'
-
+import { ProxyImage } from '@/utils/constants'
 const articles = ref([])
 const loading = ref(false)
 const mpList = ref([])
@@ -199,10 +199,7 @@ const handleSearch = () => {
   fetchArticles()
 }
 const processedContent = (record: any) => {
-  return record.content.replace(
-    /(<img[^>]*src=["'])(?!\/static\/res\/logo\/)([^"']*)/g,
-    '$1/static/res/logo/$2'
-  ).replace(/<img([^>]*)width=["'][^"']*["']([^>]*)>/g, '<img$1$2>')
+  return ProxyImage(record.content)
 }
 const viewArticle = async (record: any) => {
   loading.value = true

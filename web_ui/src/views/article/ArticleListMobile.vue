@@ -131,7 +131,7 @@ import { IconCheck, IconClose } from '@arco-design/web-vue/es/icon'
 import { getArticles, getArticleDetail,getPrevArticle,getNextArticle,toggleArticleReadStatus } from '@/api/article'
 import { getSubscriptions } from '@/api/subscription'
 import { Message } from '@arco-design/web-vue'
-
+import { ProxyImage } from '@/utils/constants'
 const articles = ref([])
 const loading = ref(false)
 const mpList = ref([])
@@ -218,10 +218,7 @@ const handleSearch = () => {
   fetchArticles()
 }
  const processedContent = (record: any) => {
- return record.content.replace(
-      /(<img[^>]*src=["'])(?!\/static\/res\/logo\/)([^"']*)/g,
-      '$1/static/res/logo/$2'
- ).replace(/<img([^>]*)width=["'][^"']*["']([^>]*)>/g, '<img$1$2>')
+  return ProxyImage(record.content)
  }
 const viewArticle = async (record: any,action_type: number) => {
   loading.value = true

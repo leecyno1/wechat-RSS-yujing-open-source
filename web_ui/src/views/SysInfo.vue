@@ -33,6 +33,10 @@
           <template #label> <desktop-outlined /> 操作系统 </template>
           {{ sysInfo.os.name }}
         </a-descriptions-item>
+        <a-descriptions-item label="Docker版本">
+          <template #label> <desktop-outlined /> Docker版本 </template>
+          {{ sysInfo.os.docker_version }}
+        </a-descriptions-item>
         <a-descriptions-item label="系统版本">
           <template #label> <code-outlined /> 系统版本 </template>
           {{ sysInfo.os.version }} ({{ sysInfo.os.release }})

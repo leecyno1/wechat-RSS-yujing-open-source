@@ -11,7 +11,12 @@ from core.config import cfg
 from jobs.mps import TaskQueue
 from driver.success import getLoginInfo,getStatus
 router = APIRouter(prefix="/sys", tags=["系统信息"])
-
+def get_docker_version():
+        try:
+            with open("./docker_version.txt", "r") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            return "未知"
 # 记录服务器启动时间
 _START_TIME = time.time()
 @router.get("/base_info", summary="常规信息")
@@ -19,8 +24,10 @@ async def get_base_info() -> Dict[str, Any]:
     try:
         from .ver import API_VERSION
         from core.config import VERSION as CORE_VERSION,LATEST_VERSION
+       
         base_info = {
             'api_version': API_VERSION,
+            'docker_version': get_docker_version(),
             'core_version': CORE_VERSION,
             "ui":{
                 "name": cfg.get("server.name",""),
@@ -81,6 +88,7 @@ async def get_system_info(
             'os': {
                 'name': platform.system(),
                 'version': platform.version(),
+                'docker_version': get_docker_version(),
                 'release': platform.release(),
             },
             'python_version': sys.version,

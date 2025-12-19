@@ -212,8 +212,8 @@ onMounted(() => {
     <div class="message-task-list">
       <div class="header">
         <h2>消息任务列表</h2>
-        <a-tooltip :content="browserNotificationEnabled ? '点击关闭浏览器通知' : '开启后有新文章时浏览器标题会闪烁并播放提示音'">
-          <a-button 
+        <a-tooltip :content="browserNotificationEnabled ? '点击关闭浏览器通知' : '开启后有新文章时浏览器标题会闪烁并播放提示音'" class="desktop-only">
+          <a-button class="desktop-only"
             :type="browserNotificationEnabled ? 'primary' : 'outline'" 
             :status="browserNotificationEnabled ? 'success' : 'normal'"
             @click="toggleNotification"
@@ -372,5 +372,16 @@ h2 {
 .a-list-item-extra {
   display: flex;
   gap: 8px;
+}
+
+/* 移动端隐藏桌面端元素 */
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
 }
 </style>

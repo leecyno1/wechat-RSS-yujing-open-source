@@ -7,6 +7,7 @@ import time
 import core.wait as Wait
 import base64
 import re
+from bs4 import BeautifulSoup
 import os
 from datetime import datetime
 from core.config import cfg
@@ -410,10 +411,36 @@ class WXArticleFetcher:
             print_success(f"PDF 文件已生成{output_path}")
         except Exception as e:
             print_error(f"生成 PDF 失败: {str(e)}")
-
+    
+    def fix_images(self,content:str)->str:
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            # 找到内容
+            js_content_div = soup
+            # 移除style属性中的visibility: hidden;
+            if js_content_div is None:
+                return ""
+            js_content_div.attrs.pop('style', None)
+            # 找到所有的img标签
+            img_tags = js_content_div.find_all('img')
+            # 遍历每个img标签并修改属性，设置宽度为1080p
+            for img_tag in img_tags:
+                if 'data-src' in img_tag.attrs:
+                    img_tag['src'] = img_tag['data-src']
+                    del img_tag['data-src']
+                if 'style' in img_tag.attrs:
+                    style = img_tag['style']
+                    # 使用正则表达式替换width属性
+                    style = re.sub(r'width\s*:\s*\d+\s*px', 'width: 1080px', style)
+                    img_tag['style'] = style
+            return  js_content_div.prettify()
+        except Exception as e:
+            print_error(f"修复图片失败: {str(e)}")
+        return content
    
     def clean_article_content(self,html_content: str):
         from tools.html import htmltools
+        html_content=self.fix_images(html_content)
         if not cfg.get("gather.clean_html",False):
             return html_content
         return htmltools.clean_html(str(html_content).strip(),

@@ -201,6 +201,7 @@ import { formatDateTime, formatTimestamp } from '@/utils/date'
 import router from '@/router'
 import { deleteMpApi } from '@/api/subscription'
 import TextIcon from '@/components/TextIcon.vue'
+import { ProxyImage } from '@/utils/constants'
 
 const articles = ref([])
 const loading = ref(false)
@@ -549,10 +550,7 @@ const handleAddSuccess = () => {
   fetchArticles()
 }
  const processedContent = (record: any) => {
- return record.content.replace(
-      /(<img[^>]*src=["'])(?!\/static\/res\/logo\/)([^"']*)/g,
-      '$1/static/res/logo/$2'
- ).replace(/<img([^>]*)width=["'][^"']*["']([^>]*)>/g, '<img$1$2>')
+ return ProxyImage(record.content)
  }
 const viewArticle = async (record: any,action_type: number) => {
   loading.value = true
