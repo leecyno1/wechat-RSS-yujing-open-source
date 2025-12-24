@@ -19,11 +19,33 @@ class MpsApi(WxGather):
                 logger.error(e)
         return ""
     # 重写 get_Articles 方法
-    def get_Articles(self, faker_id:str=None,Mps_id:str=None,Mps_title="",CallBack=None,start_page=0,MaxPage:int=1,interval=10,Gather_Content=True,Item_Over_CallBack=None,Over_CallBack=None):
+    def get_Articles(
+        self,
+        faker_id: str = None,
+        Mps_id: str = None,
+        Mps_title: str = "",
+        CallBack=None,
+        start_page=0,
+        MaxPage: int = 1,
+        interval=10,
+        Gather_Content=True,
+        Item_Over_CallBack=None,
+        Over_CallBack=None,
+        since_days: int = None,
+        since_ts: int = None,
+    ):
         super().Start(mp_id=Mps_id)
         if self.Gather_Content:
              Gather_Content=True
         print(f"API获取模式,是否采集[{Mps_title}]内容：{Gather_Content}\n")
+        threshold = 0
+        try:
+            if since_ts is not None and int(since_ts) > 0:
+                threshold = int(since_ts)
+            elif since_days is not None and int(since_days) > 0:
+                threshold = int(time.time()) - int(since_days) * 86400
+        except Exception:
+            threshold = 0
         # 请求参数
         url = "https://mp.weixin.qq.com/cgi-bin/appmsg"
         count=5
@@ -75,8 +97,16 @@ class MpsApi(WxGather):
                     super().Error("错误原因:{}:代码:{}".format(msg['base_resp']['err_msg'],msg['base_resp']['ret']),code=msg['base_resp']['err_msg'])
                     break    
                 if "app_msg_list" in msg:
+                    stop_all = False
                     for item in msg["app_msg_list"]:
                         time.sleep(random.randint(1,3))
+                        try:
+                            ts = int(item.get("update_time") or item.get("create_time") or 0)
+                        except Exception:
+                            ts = 0
+                        if threshold and ts and ts < threshold:
+                            stop_all = True
+                            break
                         # info = '"{}","{}","{}","{}"'.format(str(item["aid"]), item['title'], item['link'], str(item['create_time']))
                         if Gather_Content:
                             if not super().HasGathered(item["aid"]):
@@ -88,6 +118,8 @@ class MpsApi(WxGather):
                         if CallBack is not None:
                             super().FillBack(CallBack=CallBack,data=item,Ext_Data={"mp_title":Mps_title,"mp_id":Mps_id})
                     print(f"第{i+1}页爬取成功\n")
+                    if stop_all:
+                        break
                 # 翻页
                 i += 1
             except requests.exceptions.Timeout:

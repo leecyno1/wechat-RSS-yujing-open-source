@@ -56,7 +56,9 @@ class Db:
             raise
     def create_tables(self):
         """Create all tables defined in models"""
-        from core.models.base import Base as B # 导入所有模型
+        # Ensure all models are imported so they are registered on Base.metadata
+        import core.models  # noqa: F401
+        from core.models.base import Base as B
         try:
             B.metadata.create_all(self.engine)
         except Exception as e:
@@ -92,40 +94,102 @@ class Db:
         return False
      
     def add_article(self, article_data: dict,check_exist=False) -> bool:
+        """Insert or update an article (upsert).
+
+        Older records may miss digest/cover/content; re-sync should backfill instead of failing on UNIQUE.
+        """
+        session = self.get_session()
+        from datetime import datetime
+        from sqlalchemy import or_
+        from core.models.base import DATA_STATUS
+
         try:
-            session=self.get_session()
-            from datetime import datetime
             art = Article(**article_data)
             if art.id:
-               art.id=f"{str(art.mp_id)}-{art.id}".replace("MP_WXS_","")
-            
+                art.id = f"{str(art.mp_id)}-{art.id}".replace("MP_WXS_", "")
+
+            # Optional existence guard for legacy callers (fix SQLAlchemy OR).
             if check_exist:
-                # 检查文章是否已存在
-                existing_article = session.query(Article).filter(Article.url == art.url or Article.id == art.id).first()
+                existing_article = session.query(Article).filter(or_(Article.url == art.url, Article.id == art.id)).first()
                 if existing_article is not None:
                     print_warning(f"Article already exists: {art.id}")
                     return False
-                
-            if art.created_at is None:
-                art.created_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            if art.updated_at is None:
-                art.updated_at=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            art.created_at=datetime.strptime(art.created_at ,'%Y-%m-%d %H:%M:%S')
-            art.updated_at=datetime.strptime(art.updated_at,'%Y-%m-%d %H:%M:%S')
-            art.content=art.content
-            from core.models.base import DATA_STATUS
-            art.status=DATA_STATUS.ACTIVE
-            session.add(art)
-            # self._session.merge(art)
-            sta=session.commit()
-            
-        except Exception as e:
-            if "UNIQUE" in str(e) or "Duplicate entry" in str(e):
-                print_warning(f"Article already exists: {art.id}")
+
+            now = datetime.now()
+            existing = session.query(Article).filter(Article.id == art.id).first()
+            changed = False
+
+            if existing:
+                def _set_if_missing(field: str, value):
+                    nonlocal changed
+                    if value is None:
+                        return
+                    if isinstance(value, str) and value.strip() == "":
+                        return
+                    current = getattr(existing, field, None)
+                    if current is None or (isinstance(current, str) and current.strip() == ""):
+                        setattr(existing, field, value)
+                        changed = True
+
+                _set_if_missing("title", art.title)
+                _set_if_missing("url", art.url)
+                _set_if_missing("pic_url", art.pic_url)
+                _set_if_missing("description", getattr(art, "description", None))
+
+                # publish_time: keep the newer one
+                if getattr(art, "publish_time", None) is not None and getattr(existing, "publish_time", None) is not None:
+                    try:
+                        if int(art.publish_time) > int(existing.publish_time):
+                            existing.publish_time = art.publish_time
+                            changed = True
+                    except Exception:
+                        pass
+                elif getattr(art, "publish_time", None) is not None and getattr(existing, "publish_time", None) is None:
+                    existing.publish_time = art.publish_time
+                    changed = True
+
+                # content: update if new content provided and existing has none
+                new_content = getattr(art, "content", "") or ""
+                if new_content and (not getattr(existing, "content", "") or getattr(existing, "content", "") == "DELETED"):
+                    existing.content = new_content
+                    changed = True
+
+                if getattr(existing, "mp_id", None) != getattr(art, "mp_id", None) and getattr(art, "mp_id", None):
+                    existing.mp_id = art.mp_id
+                    changed = True
+
+                if changed:
+                    existing.status = DATA_STATUS.ACTIVE
+                    existing.updated_at = now
+                    if not getattr(existing, "created_at", None):
+                        existing.created_at = now
+                    session.add(existing)
+                    session.commit()
             else:
-                print_error(f"Failed to add article: {e}")
+                art.status = DATA_STATUS.ACTIVE
+                if art.created_at is None:
+                    art.created_at = now
+                if art.updated_at is None:
+                    art.updated_at = now
+                session.add(art)
+                session.commit()
+                changed = True
+
+            # 洞察自动入库：异步执行，避免阻塞采集流程
+            if changed:
+                try:
+                    if cfg.get("insights.auto_basic", True) or cfg.get("insights.auto_key_points", False) or cfg.get("insights.auto_llm_breakdown", False):
+                        from core.queue import TaskQueue
+                        from core.insights import InsightsService
+                        TaskQueue.add_task(InsightsService().ensure_cached, art.id)
+                except Exception:
+                    pass
+
+            return changed
+        except Exception as e:
+            session.rollback()
+            print_error(f"Failed to add/update article: {e}")
             return False
-        return True    
         
     def get_articles(self, id:str=None, limit:int=30, offset:int=0) -> List[Article]:
         try:

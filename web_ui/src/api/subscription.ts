@@ -87,7 +87,11 @@ export const searchBiz = (kw: string, params: { page?: number; pageSize?: number
     offset: (params?.page || 0) * (params?.pageSize || 10),
     limit: params?.pageSize || 10
   }
-  return http.get<SubscriptionListResult>(`/wx/mps/search/${kw}`,{ params: apiParams })
+  return http.get<SubscriptionListResult>(`/wx/mps/search/${encodeURIComponent(kw)}`,{ params: apiParams })
+}
+
+export const getPlaza = (params?: { kw?: string }) => {
+  return http.get(`/wx/mps/plaza`, { params: { kw: params?.kw || '' } })
 }
 
 // 搜索公众号(不分页)

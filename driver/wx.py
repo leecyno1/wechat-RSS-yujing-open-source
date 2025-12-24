@@ -550,8 +550,21 @@ class Wx:
             
     def check_lock(self):
         """检查锁定状态"""
-        time.sleep(1)
-        return os.path.exists(self.lock_file_path) or self.GetHasCode()
+        # Only treat lock-file as in-progress indicator; QR image existing != locked.
+        try:
+            if not os.path.exists(self.lock_file_path):
+                return False
+            try:
+                with open(self.lock_file_path, 'r') as f:
+                    t = float((f.read() or "0").strip())
+            except Exception:
+                t = os.path.getmtime(self.lock_file_path)
+            if t and (time.time() - t) > 30:
+                self.release_lock()
+                return False
+            return True
+        except Exception:
+            return False
         
     def set_lock(self):
         """创建锁定文件"""

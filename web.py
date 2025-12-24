@@ -19,6 +19,13 @@ from apis.tags import router as tags_router
 from apis.export import router as export_router
 from apis.tools import router as tools_router
 from apis.github_update import router as github_router
+from apis.insights import router as insights_router
+from apis.favorites import router as favorites_router
+from apis.notes import router as notes_router
+from apis.library import router as library_router
+from apis.public import router as public_router
+from apis.channels import router as channels_router
+from apis.service_api import router as service_router
 import apis
 import os
 from core.config import cfg,VERSION,API_BASE
@@ -72,6 +79,13 @@ api_router.include_router(tags_router)
 api_router.include_router(export_router)
 api_router.include_router(tools_router)
 api_router.include_router(github_router)
+api_router.include_router(insights_router)
+api_router.include_router(favorites_router)
+api_router.include_router(notes_router)
+api_router.include_router(library_router)
+api_router.include_router(public_router)
+api_router.include_router(channels_router)
+api_router.include_router(service_router)
 
 resource_router = APIRouter(prefix="/static")
 resource_router.include_router(res_router)

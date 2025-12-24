@@ -26,6 +26,10 @@ services:
       - DB=mysql+pymysql://rss_user:pass123456@db-mp/we_mp_rss?charset=utf8mb4
       - USERNAME=admin
       - PASSWORD=admin@123
+      # 可选：启用LLM全文拆解（不要把密钥写进仓库，建议通过 .env 注入）
+      - SILICONFLOW_API_URL=https://api.siliconflow.cn/v1
+      - SILICONFLOW_MODEL=Qwen/Qwen3-30B-A3B
+      - SILICONFLOW_API_KEY=
     volumes:
       - ./data:/app/data
     depends_on:

@@ -75,6 +75,43 @@ docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  docker.1ms.ru
 - 支持导出md/docx/pdf/json格式
 - 支持API接口调用/WebHook调用
 
+## 速览/拆解/笔记/收藏（新增）
+
+- 内置阅读器：在文章列表点击标题可在右侧阅读器中查看 `精华速览/关键信息(一级二级标题)/全文拆解(LLM)/笔记/正文`。
+- 摘要与关键信息会写入本地数据库（表：`article_insights`），供后续其他服务通过 API 调用。
+- 收藏与笔记会写入本地数据库（表：`article_favorites`、`article_notes`）。
+
+### LLM 全文拆解（可选）
+
+启用环境变量（推荐用 `.env` 或容器环境变量注入，不要把密钥写进仓库）：
+
+- `SILICONFLOW_API_URL`：默认 `https://api.siliconflow.cn/v1`
+- `SILICONFLOW_MODEL`：默认 `Qwen/Qwen3-30B-A3B`
+- `SILICONFLOW_API_KEY`：SiliconFlow 密钥（留空则禁用“全文拆解”接口）
+
+### 主要 API（供外部服务使用）
+
+- `GET /api/v1/wx/library/articles`：文章库列表（可带洞察/收藏/笔记统计）
+- `GET /api/v1/wx/library/articles/{article_id}`：文章库详情（含洞察/收藏/笔记）
+- `GET /api/v1/wx/insights/{article_id}`：获取/生成摘要与标题
+- `POST /api/v1/wx/insights/{article_id}/breakdown`：生成 LLM 全文拆解
+- `POST/DELETE /api/v1/wx/favorites/{article_id}`：收藏/取消收藏
+- `GET/POST/PUT/DELETE /api/v1/wx/notes`：笔记 CRUD
+- `POST /api/v1/wx/auth/session`：手动设置公众号平台会话（免扫码，需要你自行提供公众号平台 token+cookie）
+
+### 免扫码登录（可选）
+
+如果你不想扫码，可以在“已登录的公众号平台网页”里手动获取 `token` 和 `cookie`，然后通过 API 写入到 `data/wx.lic`：
+
+```bash
+TOKEN=$(curl -sS -X POST -d "username=admin&password=admin@123" http://localhost:8001/api/v1/wx/auth/token | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -sS -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -X POST http://localhost:8001/api/v1/wx/auth/session \
+  -d '{"token":"<MP_TOKEN>","cookie":"<MP_COOKIE>"}'
+```
+
+注意：没有有效的公众号平台 `token/cookie` 就无法搜索与更新公众号文章（微信没有官方 RSS）。
+
 
 # ❤️ 赞助
 如果觉得 We-MP-RSS 对你有帮助，欢迎给我来一杯啤酒！<br/>
@@ -149,6 +186,22 @@ yarn dev
 ```
 3. 访问前端页面
 ```
+http://localhost:3000
+```
+
+## 开发模式（免每次重构镜像）
+
+适用于频繁修改后端/前端代码的场景：后端 `AUTO_RELOAD=True` 自动重载，前端用 Vite dev server。
+
+1) 启动开发 compose（后端 8001，前端 3000）
+
+```bash
+docker compose -f compose/docker-compose-dev.yaml up -d
+```
+
+2) 访问开发前端
+
+```text
 http://localhost:3000
 ```
 

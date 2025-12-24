@@ -69,17 +69,21 @@ export const QRCode = () => {
   })
 }
 let interval_status_Id:number=0
+export const getQRCodeStatusOnce = () => {
+  return http.get('/wx/auth/qr/status')
+}
 export const checkQRCodeStatus = () => {
   return new Promise((resolve, reject) => {
      if (interval_status_Id) {
       clearInterval(interval_status_Id);
-      qrCodeIntervalId = 0;
+      interval_status_Id = 0;
     }
       interval_status_Id = setInterval(() => {
-        http.get("wx/auth/qr/status").then(response => {
+        getQRCodeStatusOnce().then(response => {
           if(response?.login_status){
             Message.success("授权成功")
             clearInterval(interval_status_Id)
+            interval_status_Id = 0
             resolve(response)
           }
         }).catch(err => {

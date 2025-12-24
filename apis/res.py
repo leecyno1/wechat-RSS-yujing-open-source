@@ -13,7 +13,7 @@ if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 router = APIRouter(prefix="/res", tags=["资源反向代理"])
-@router.api_route("/logo/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], operation_id="reverse_proxy_logo")
+@router.api_route("/logo/{path:path}", methods=["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"], operation_id="reverse_proxy_logo")
 async def reverse_proxy(request: Request, path: str):
     hosts=["mmbiz.qpic.cn","mmbiz.qlogo.cn","mmecoa.qpic.cn"]
     path=path.replace("https://", "http://")
@@ -27,8 +27,11 @@ async def reverse_proxy(request: Request, path: str):
         headers={"Location":path},
     )
     
-    # 生成缓存文件名
-    cache_key = f"{request.method}_{path}".encode('utf-8')
+    # Preserve query string for remote resources (e.g. `?wx_fmt=png`).
+    query_str = str(getattr(request.url, "query", "") or "")
+
+    # 生成缓存文件名（包含 query，避免不同参数缓存冲突）
+    cache_key = f"{request.method}_{path}?{query_str}".encode('utf-8')
     cache_filename = os.path.join(CACHE_DIR, hashlib.sha256(cache_key).hexdigest())
     
     # 检查缓存是否存在且有效
@@ -57,19 +60,20 @@ async def reverse_proxy(request: Request, path: str):
             )
     
     target_url = path
+    if query_str:
+        target_url = f"{path}?{query_str}"
     
-    client = httpx.AsyncClient()
     request_data = await request.body()
     headers = dict(request.headers)
     headers.pop("host", host)
     headers.pop("referer", None)
-    print(headers)
-    resp = await client.request(
-        method=request.method,
-        url=target_url,
-        # headers=headers,
-        content=request_data
-    )
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        resp = await client.request(
+            method=request.method,
+            url=target_url,
+            # headers=headers,
+            content=request_data
+        )
     
     content = resp.content
     status_code = resp.status_code

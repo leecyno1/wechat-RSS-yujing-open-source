@@ -4,13 +4,15 @@ from .playwright_driver import PlaywrightController
 from typing import Dict
 from core.print import print_error,print_info,print_success,print_warning
 import time
-import core.wait as Wait
+from core.wait import Wait
 import base64
 import re
 from bs4 import BeautifulSoup
 import os
 from datetime import datetime
 from core.config import cfg
+from http.cookies import SimpleCookie
+import json
 
 class WXArticleFetcher:
     """微信公众号文章获取器
@@ -258,6 +260,13 @@ class WXArticleFetcher:
        
         self.page = self.controller.page
         print_warning(f"Get:{url} Wait:{self.wait_timeout}")
+        try:
+            from driver.token import get as get_wx_cfg
+
+            self._inject_mp_cookies(get_wx_cfg("cookie", ""))
+        except Exception:
+            pass
+
         self.controller.open_url(url)
         page = self.page
         content=""
@@ -378,6 +387,53 @@ class WXArticleFetcher:
             pass
         self.Close()
         return info
+
+    def _inject_mp_cookies(self, cookies_str: str) -> None:
+        s = (cookies_str or "").strip()
+        if not s:
+            return
+        cookies: list[dict] = []
+        try:
+            if s.startswith("[") or s.startswith("{"):
+                obj = json.loads(s)
+                if isinstance(obj, dict) and "cookies" in obj:
+                    obj = obj.get("cookies")
+                if isinstance(obj, list):
+                    for c in obj:
+                        if not isinstance(c, dict):
+                            continue
+                        name = str(c.get("name") or "").strip()
+                        value = str(c.get("value") or "").strip()
+                        if not (name and value):
+                            continue
+                        cookie = dict(c)
+                        cookie.setdefault("name", name)
+                        cookie.setdefault("value", value)
+                        cookie.setdefault("url", "https://mp.weixin.qq.com")
+                        cookie.setdefault("path", "/")
+                        cookies.append(cookie)
+        except Exception:
+            cookies = []
+
+        if not cookies:
+            jar = SimpleCookie()
+            try:
+                jar.load(s)
+            except Exception:
+                return
+            for k, morsel in jar.items():
+                name = str(k or "").strip()
+                value = str(morsel.value or "").strip()
+                if not (name and value):
+                    continue
+                cookies.append({"name": name, "value": value, "url": "https://mp.weixin.qq.com", "path": "/"})
+
+        if not cookies:
+            return
+        try:
+            self.controller.add_cookies(cookies)
+        except Exception:
+            pass
     def Close(self):
         """关闭浏览器"""
         if hasattr(self, 'controller'):

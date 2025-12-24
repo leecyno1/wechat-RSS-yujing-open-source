@@ -11,6 +11,8 @@ from .ver import API_VERSION
 from .base import success_response, error_response
 from driver.base import WX_API
 from core.config import set_config, cfg
+from pydantic import BaseModel, Field
+from driver.token import set_token
 router = APIRouter(prefix=f"/auth", tags=["认证"])
 from driver.success import Success
 from driver.wx_api import get_qr_code #通过API登录
@@ -23,10 +25,31 @@ def ApiSuccess(data):
     else:
             print("\n登录失败，请检查上述错误信息")
 @router.get("/qr/code", summary="获取登录二维码")
-async def get_qrcode(current_user=Depends(get_current_user)):
+async def get_qrcode(force: bool = False, current_user=Depends(get_current_user)):
 
+    # force param reserved for future (driver handles expiry refresh automatically)
     code_url=WX_API.GetCode(Success)
     return success_response(code_url)
+
+
+class ManualSession(BaseModel):
+    token: str = Field(..., description="微信公众号平台 token")
+    cookie: str = Field(..., description="微信公众号平台 Cookie 字符串")
+    fingerprint: str | None = Field(None, description="可选 fingerprint")
+
+
+@router.post("/session", summary="手动设置公众号平台会话(免扫码)")
+async def set_manual_session(payload: ManualSession, current_user=Depends(get_current_user)):
+    set_token(
+        {
+            "token": payload.token,
+            "cookies_str": payload.cookie,
+            "fingerprint": payload.fingerprint or "",
+            "expiry": {},
+        }
+    )
+    cfg.reload()
+    return success_response({"ok": True})
 @router.get("/qr/image", summary="获取登录二维码图片")
 async def qr_image(current_user=Depends(get_current_user)):
     return success_response(WX_API.GetHasCode())

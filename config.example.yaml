@@ -99,7 +99,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:
@@ -118,3 +118,34 @@ export:
     enable: ${EXPORT_MARKDOWN:-False}
     #markdown导出目录 默认./data/markdown
     dir: ${EXPORT_MARKDOWN_DIR:-./data/markdown}
+
+# 洞察/LLM
+insights:
+  # 是否在文章入库后自动生成基础洞察(摘要/一级二级标题)
+  auto_basic: ${INSIGHTS_AUTO_BASIC:-True}
+  # 摘要最大长度(字符)
+  summary_max_len: ${INSIGHTS_SUMMARY_MAX_LEN:-200}
+  # 关键信息(一级/二级标题)最大条数
+  headings_max_items: ${INSIGHTS_HEADINGS_MAX_ITEMS:-20}
+  # 新增订阅/更新后预热近N天文章(抓取+生成洞察)，提升首次打开体验
+  prewarm_on_add: ${INSIGHTS_PREWARM_ON_ADD:-True}
+  prewarm_on_update: ${INSIGHTS_PREWARM_ON_UPDATE:-True}
+  prewarm_days: ${INSIGHTS_PREWARM_DAYS:-3}
+  prewarm_limit: ${INSIGHTS_PREWARM_LIMIT:-120}
+  prewarm_max_pages: ${INSIGHTS_PREWARM_MAX_PAGES:-30}
+
+llm:
+  # 目前仅内置 siliconflow(OpenAI兼容)；为空则禁用LLM拆解接口
+  provider: ${LLM_PROVIDER:-siliconflow}
+  # 限制输入长度(字符)，避免超长文章导致超时/成本过高
+  max_chars: ${LLM_MAX_CHARS:-24000}
+  timeout: ${LLM_TIMEOUT:-60}
+  siliconflow:
+    api_url: ${SILICONFLOW_API_URL:-https://api.siliconflow.cn/v1}
+    api_key: ${SILICONFLOW_API_KEY:-}
+    model: ${SILICONFLOW_MODEL:-Qwen/Qwen3-30B-A3B}
+
+# 对外集成(给其它项目调用) - Service REST API
+service:
+  # 逗号分隔；通过请求头 X-API-Key 访问 /api/v1/wx/service/*
+  api_keys: ${SERVICE_API_KEYS:-}

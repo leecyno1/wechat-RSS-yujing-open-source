@@ -4,9 +4,21 @@ from core.print import print_warning
 import threading
 import os
 if __name__ == '__main__':
-    print("环境变量:")
-    for k,v in os.environ.items():
-        print(f"{k}={v}")
+    def _mask(v: str) -> str:
+        s = str(v or "")
+        if not s:
+            return ""
+        if len(s) <= 10:
+            return s[:2] + "***"
+        return s[:4] + "***" + s[-4:]
+
+    print("环境变量(敏感信息已脱敏):")
+    for k, v in os.environ.items():
+        upper = str(k).upper()
+        if any(x in upper for x in ("KEY", "TOKEN", "COOKIE", "PASSWORD", "SECRET")):
+            print(f"{k}={_mask(v)}")
+        else:
+            print(f"{k}={v}")
     if cfg.args.init=="True":
         import init_sys as init
         init.init()
@@ -20,8 +32,8 @@ if __name__ == '__main__':
     thread=cfg.get("server.threads",1)
     uvicorn.run("web:app", host="0.0.0.0", port=int(cfg.get("port",8001)),
             reload=AutoReload,
-            reload_dirs=['core','web_ui'],
-            reload_excludes=['static','web_ui','data'], 
+            reload_dirs=['.','core','apis','driver','jobs','tools','schemas'],
+            reload_excludes=['static','data','web_ui','compose'], 
             workers=thread,
             )
     pass

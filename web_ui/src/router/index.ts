@@ -12,6 +12,8 @@ import ConfigDetail from '../views/ConfigDetail.vue'
 import MessageTaskList from '../views/MessageTaskList.vue'
 import MessageTaskForm from '../views/MessageTaskForm.vue'
 import NovelReader from '../views/NovelReader.vue'
+import Favorites from '../views/Favorites.vue'
+import ChannelsPublic from '../views/ChannelsPublic.vue'
 
 const routes = [
   {
@@ -69,6 +71,20 @@ const routes = [
           requiresAuth: true,
           permissions: ['config:view'] 
         }
+      },
+      {
+        path: 'favorites',
+        name: 'Favorites',
+        component: Favorites,
+        meta: {
+          requiresAuth: true
+        }
+      },
+      {
+        path: 'channels',
+        name: 'ChannelsPublic',
+        component: ChannelsPublic,
+        meta: { requiresAuth: false }
       },
       {
         path: 'configs/:key',

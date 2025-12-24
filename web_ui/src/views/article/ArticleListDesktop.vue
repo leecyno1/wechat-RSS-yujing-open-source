@@ -123,30 +123,162 @@
             <a-input-search v-model="searchText" placeholder="搜索文章标题" @search="handleSearch" @keyup.enter="handleSearch"
               allow-clear />
           </div>
-          <a-table :columns="columns" :data="articles" :loading="loading" :pagination="pagination" :row-selection="{
-            type: 'checkbox',
-            showCheckedAll: true,
-            width: 50,
-            fixed: true,
-            checkStrictly: true,
-            onlyCurrent: false
-          }" row-key="id" @page-change="handlePageChange" @page-size-change="handlePageSizeChange" v-model:selectedKeys="selectedRowKeys">
-            <template #status="{ record }">
-              <a-tag :color="statusColorMap[record.status]">
-                {{ statusTextMap[record.status] }}
-              </a-tag>
-            </template>
-            <template #actions="{ record }">
-              <a-space>
-                <a-button type="text" @click="viewArticle(record)" :title="record.id">
-                  <template #icon><icon-eye /></template>
-                </a-button>
-                <a-button type="text" status="danger" @click="deleteArticle(record.id)">
-                  <template #icon><icon-delete /></template>
-                </a-button>
-              </a-space>
-            </template>
-          </a-table>
+
+          <div class="content-split">
+            <div class="content-main">
+              <a-table :columns="columns" :data="articles" :loading="loading" :pagination="pagination" :row-selection="{
+                type: 'checkbox',
+                showCheckedAll: true,
+                width: 50,
+                fixed: true,
+                checkStrictly: true,
+                onlyCurrent: false
+              }" row-key="id" @page-change="handlePageChange" @page-size-change="handlePageSizeChange" v-model:selectedKeys="selectedRowKeys">
+                <template #status="{ record }">
+                  <a-tag :color="statusColorMap[record.status]">
+                    {{ statusTextMap[record.status] }}
+                  </a-tag>
+                </template>
+                <template #actions="{ record }">
+                  <a-space>
+                    <a-button type="text" @click="openInReader(record)" :title="record.id">
+                      <template #icon><icon-eye /></template>
+                    </a-button>
+                    <a-button type="text" @click="openArticleModal(record)" :title="record.id">
+                      <template #icon><icon-code /></template>
+                    </a-button>
+                    <a-button type="text" status="danger" @click="deleteArticle(record.id)">
+                      <template #icon><icon-delete /></template>
+                    </a-button>
+                  </a-space>
+                </template>
+              </a-table>
+            </div>
+
+            <div class="content-side">
+              <a-card :bordered="false" class="reader-card" :title="selectedArticle?.title ? '阅读器' : '阅读器'">
+                <template #extra>
+                  <a-space v-if="selectedArticle?.id">
+                    <a-button size="small" type="text" @click="toggleFavorite">
+                      <template #icon>
+                        <IconStarFill v-if="favorited" />
+                        <IconStar v-else />
+                      </template>
+                      {{ favorited ? '已收藏' : '收藏' }}
+                    </a-button>
+                    <a-button size="small" type="text" @click="refreshSelectedInsights" :loading="insightsLoading">
+                      <template #icon><IconRefresh /></template>
+                      刷新摘要
+                    </a-button>
+                  </a-space>
+                </template>
+
+                <a-empty v-if="!selectedArticle?.id" description="选择一篇文章开始阅读与速览" />
+
+                <div v-else class="reader-body">
+                  <div class="reader-meta">
+                    <a-typography-title :heading="6" style="margin: 0 0 6px 0;">
+                      {{ selectedArticle.title }}
+                    </a-typography-title>
+                    <div class="reader-meta-line">
+                      <span>{{ selectedArticle.mp_name }}</span>
+                      <span style="margin: 0 6px;">·</span>
+                      <span>{{ formatTimestamp(selectedArticle.publish_time) }}</span>
+                    </div>
+                    <a-space style="margin-top: 8px;" size="mini" wrap>
+                      <a-link :href="selectedArticle.url" target="_blank">查看原文</a-link>
+                      <a-link @click="openArticleModal(selectedArticle)">弹窗阅读</a-link>
+                    </a-space>
+                  </div>
+
+                  <a-tabs v-model:active-key="readerTab" size="small" class="reader-tabs">
+                    <a-tab-pane key="summary" title="精华速览">
+                      <a-spin :loading="insightsLoading">
+                        <a-typography-paragraph v-if="insights?.summary" style="white-space: pre-wrap;">
+                          {{ insights.summary }}
+                        </a-typography-paragraph>
+                        <a-empty v-else description="暂无摘要(可点击右上角刷新)" />
+                      </a-spin>
+                    </a-tab-pane>
+                    <a-tab-pane key="headings" title="关键信息">
+                      <a-spin :loading="insightsLoading">
+                        <a-empty v-if="!insights?.headings?.length" description="未识别到一级/二级标题" />
+                        <ol v-else class="headings-list">
+                          <li v-for="(h, idx) in insights.headings" :key="idx">
+                            <span class="heading-level">H{{ h.level }}</span>
+                            <span>{{ h.text }}</span>
+                          </li>
+                        </ol>
+                      </a-spin>
+                    </a-tab-pane>
+                    <a-tab-pane key="breakdown" title="全文拆解">
+                      <a-space direction="vertical" fill>
+                        <a-space>
+                          <a-radio-group v-model="breakdownMaxLevel" type="button" size="mini">
+                            <a-radio :value="1">一级</a-radio>
+                            <a-radio :value="2">二级</a-radio>
+                            <a-radio :value="3">三级</a-radio>
+                          </a-radio-group>
+                          <a-button size="mini" type="primary" @click="runLlmBreakdown" :loading="breakdownLoading">
+                            生成/刷新
+                          </a-button>
+                        </a-space>
+
+                        <a-alert v-if="insights?.error" type="warning" style="margin: 8px 0;">
+                          {{ insights.error }}
+                        </a-alert>
+
+                        <a-empty v-if="!flattenedOutline.length" description="暂无拆解(点击生成/刷新)" />
+                        <div v-else class="outline">
+                          <div v-for="(node, idx) in flattenedOutline" :key="idx" class="outline-node"
+                            :style="{ paddingLeft: ((node.level - 1) * 12) + 'px' }">
+                            <div class="outline-heading">H{{ node.level }} · {{ node.heading }}</div>
+                            <ul v-if="node.bullets?.length" class="outline-bullets">
+                              <li v-for="(b, bi) in node.bullets" :key="bi">{{ b }}</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </a-space>
+                    </a-tab-pane>
+                    <a-tab-pane key="notes" title="笔记">
+                      <a-space direction="vertical" fill>
+                        <a-textarea v-model="noteDraft" placeholder="写点笔记(支持Markdown)..." :auto-size="{ minRows: 3, maxRows: 8 }" />
+                        <a-space>
+                          <a-button size="mini" type="primary" @click="addNote" :loading="noteSaving" :disabled="!noteDraft.trim()">
+                            保存笔记
+                          </a-button>
+                          <a-button size="mini" @click="loadNotes" :loading="notesLoading">
+                            刷新
+                          </a-button>
+                        </a-space>
+                        <a-empty v-if="!notes?.length" description="暂无笔记" />
+                        <div v-else class="notes-list">
+                          <a-card v-for="n in notes" :key="n.id" size="small" :bordered="true" style="margin-bottom: 8px;">
+                            <template #extra>
+                              <a-space size="mini">
+                                <a-button size="mini" type="text" @click="rewriteExistingNote(n.id)">
+                                  <template #icon><IconEdit /></template>
+                                  转写
+                                </a-button>
+                                <a-button size="mini" type="text" status="danger" @click="removeNote(n.id)">
+                                  <template #icon><icon-delete /></template>
+                                </a-button>
+                              </a-space>
+                            </template>
+                            <div style="white-space: pre-wrap;">{{ n.content }}</div>
+                          </a-card>
+                        </div>
+                      </a-space>
+                    </a-tab-pane>
+                    <a-tab-pane key="content" title="正文">
+                      <a-empty v-if="!selectedArticle?.content" description="正文为空(可开启采集内容或内容修正)" />
+                      <div v-else class="article-content" v-html="selectedArticle.content"></div>
+                    </a-tab-pane>
+                  </a-tabs>
+                </div>
+              </a-card>
+            </div>
+          </div>
 
 
           <a-modal v-model:visible="refreshModalVisible" title="刷新设置">
@@ -188,9 +320,9 @@
 <script setup lang="ts">
 import { Avatar } from '@/utils/constants'
 import { translatePage, setCurrentLanguage } from '@/utils/translate';
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted, h, computed } from 'vue'
 import axios from 'axios'
-import { IconApps, IconAtt, IconDelete, IconEdit, IconEye, IconRefresh, IconScan, IconWeiboCircleFill, IconWifi, IconCode, IconCheck, IconClose } from '@arco-design/web-vue/es/icon'
+import { IconApps, IconDelete, IconEdit, IconEye, IconRefresh, IconScan, IconWeiboCircleFill, IconWifi, IconCode, IconCheck, IconClose, IconStar, IconStarFill } from '@arco-design/web-vue/es/icon'
 import { getArticles, deleteArticle as deleteArticleApi, ClearArticle, ClearDuplicateArticle, getArticleDetail, toggleArticleReadStatus } from '@/api/article'
 import { ExportOPML, ExportMPS, ImportMPS } from '@/api/export'
 import ExportModal from '@/components/ExportModal.vue'
@@ -202,6 +334,10 @@ import router from '@/router'
 import { deleteMpApi } from '@/api/subscription'
 import TextIcon from '@/components/TextIcon.vue'
 import { ProxyImage } from '@/utils/constants'
+import { getInsights, refreshBasicInsights, generateLlmBreakdown } from '@/api/insights'
+import { favoriteArticle, unfavoriteArticle } from '@/api/favorites'
+import { listNotes, createNote, deleteNote, rewriteNote } from '@/api/notes'
+import { getLibraryArticle } from '@/api/library'
 
 const articles = ref([])
 const loading = ref(false)
@@ -276,14 +412,17 @@ const columns = [
     width: window.innerWidth - 1100,
     ellipsis: true,
     render: ({ record }) => h('a', {
-      href: record.url || '#',
+      href: '#',
       title: record.title,
-      target: '_blank',
       style: { 
         color: 'var(--color-text-1)',
         textDecoration: record.is_read === 1 ? 'line-through' : 'none',
         opacity: record.is_read === 1 ? 0.7 : 1
-      }
+      },
+      onClick: (e: any) => {
+        e?.preventDefault?.()
+        openInReader(record)
+      },
     }, record.title)
   },
   {
@@ -552,7 +691,7 @@ const handleAddSuccess = () => {
  const processedContent = (record: any) => {
  return ProxyImage(record.content)
  }
-const viewArticle = async (record: any,action_type: number) => {
+const viewArticle = async (record: any,action_type: number = 0) => {
   loading.value = true
   try {
     // console.log(record)
@@ -577,6 +716,157 @@ const viewArticle = async (record: any,action_type: number) => {
   } finally {
     loading.value = false
   }
+}
+
+const selectedArticle = ref<any>(null)
+const insights = ref<any>(null)
+const insightsLoading = ref(false)
+const favorited = ref(false)
+const notes = ref<any[]>([])
+const notesLoading = ref(false)
+const noteDraft = ref('')
+const noteSaving = ref(false)
+const readerTab = ref('summary')
+const breakdownMaxLevel = ref(3)
+const breakdownLoading = ref(false)
+
+const flattenedOutline = computed(() => {
+  const data = insights.value?.llm_breakdown?.outline || []
+  const maxLevel = breakdownMaxLevel.value
+  const out: any[] = []
+  const walk = (nodes: any[]) => {
+    for (const n of nodes || []) {
+      if (!n || !n.level || !n.heading) continue
+      if (n.level <= maxLevel) {
+        out.push({ level: n.level, heading: n.heading, bullets: n.bullets || [] })
+        if (n.children?.length) walk(n.children)
+      }
+    }
+  }
+  walk(data)
+  return out
+})
+
+async function openInReader(record: any) {
+  await selectArticle(record?.id || record)
+}
+
+async function selectArticle(articleOrId: any) {
+  const articleId = typeof articleOrId === 'string' ? articleOrId : articleOrId?.id
+  if (!articleId) return
+  insightsLoading.value = true
+  notesLoading.value = true
+  try {
+    const data = await getLibraryArticle(articleId)
+    if (!data) {
+      Message.error('文章不存在或无权限')
+      return
+    }
+    selectedArticle.value = {
+      ...data,
+      content: processedContent(data)
+    }
+    favorited.value = !!data.favorited
+    notes.value = data.notes || []
+    readerTab.value = 'summary'
+
+    const ins = await getInsights(articleId, true)
+    insights.value = ins
+  } catch (e) {
+    Message.error(String(e))
+  } finally {
+    insightsLoading.value = false
+    notesLoading.value = false
+  }
+}
+
+const refreshSelectedInsights = async () => {
+  if (!selectedArticle.value?.id) return
+  insightsLoading.value = true
+  try {
+    const ins = await refreshBasicInsights(selectedArticle.value.id)
+    insights.value = ins
+  } finally {
+    insightsLoading.value = false
+  }
+}
+
+const runLlmBreakdown = async () => {
+  if (!selectedArticle.value?.id) return
+  breakdownLoading.value = true
+  try {
+    const ins = await generateLlmBreakdown(selectedArticle.value.id)
+    insights.value = ins
+    readerTab.value = 'breakdown'
+  } catch (e) {
+    Message.error(String(e))
+  } finally {
+    breakdownLoading.value = false
+  }
+}
+
+const toggleFavorite = async () => {
+  if (!selectedArticle.value?.id) return
+  const id = selectedArticle.value.id
+  try {
+    if (favorited.value) {
+      await unfavoriteArticle(id)
+      favorited.value = false
+      return
+    }
+    await favoriteArticle(id)
+    favorited.value = true
+  } catch (e) {
+    Message.error(String(e))
+  }
+}
+
+const loadNotes = async () => {
+  if (!selectedArticle.value?.id) return
+  notesLoading.value = true
+  try {
+    const res = await listNotes({ article_id: selectedArticle.value.id, limit: 50, offset: 0 })
+    notes.value = res.list || []
+  } finally {
+    notesLoading.value = false
+  }
+}
+
+const addNote = async () => {
+  if (!selectedArticle.value?.id) return
+  noteSaving.value = true
+  try {
+    await createNote({ article_id: selectedArticle.value.id, content: noteDraft.value })
+    noteDraft.value = ''
+    await loadNotes()
+  } catch (e) {
+    Message.error(String(e))
+  } finally {
+    noteSaving.value = false
+  }
+}
+
+const removeNote = async (noteId: number) => {
+  try {
+    await deleteNote(noteId)
+    await loadNotes()
+  } catch (e) {
+    Message.error(String(e))
+  }
+}
+
+const rewriteExistingNote = async (noteId: number) => {
+  try {
+    await rewriteNote(noteId, { save: true })
+    Message.success('笔记已转写')
+    await loadNotes()
+  } catch (e) {
+    Message.error(String(e))
+  }
+}
+
+const openArticleModal = async (record: any) => {
+  await viewArticle(record, 0)
 }
 const currentArticle = ref({
   title: '',
@@ -811,6 +1101,67 @@ const toggleReadStatus = async (record: any) => {
 .search-bar {
   display: flex;
   margin-bottom: 20px;
+}
+
+.content-split {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.content-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.content-side {
+  width: 520px;
+  flex: 0 0 520px;
+}
+
+.reader-card {
+  position: sticky;
+  top: 20px;
+}
+
+:deep(.reader-card .arco-card-body) {
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+
+.reader-meta-line {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.headings-list {
+  padding-left: 18px;
+}
+
+.heading-level {
+  display: inline-block;
+  width: 38px;
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.outline-heading {
+  font-weight: 600;
+  color: var(--color-text-1);
+}
+
+.outline-bullets {
+  margin: 6px 0 0 18px;
+  color: var(--color-text-2);
+}
+
+.article-content {
+  overflow-x: hidden;
+}
+
+.article-content :deep(img) {
+  max-width: 100% !important;
+  height: auto !important;
 }
 
 .arco-drawer-body img {

@@ -13,7 +13,32 @@ import csv
 import io
 import os
 import uuid
+import base64
+from typing import Any, Optional
 router = APIRouter(prefix=f"/export", tags=["导入/导出"])
+
+
+def _safe_isoformat(dt: Any) -> str:
+    if dt is None:
+        return ""
+    try:
+        return dt.isoformat()
+    except Exception:
+        return str(dt)
+
+
+def _normalize_fakeid(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    value = str(value).strip()
+    if value.isdigit():
+        return value
+    try:
+        decoded = base64.b64decode(value).decode("utf-8", errors="ignore").strip()
+        return decoded if decoded.isdigit() else ""
+    except Exception:
+        return ""
+
 
 @router.get("/mps/export", summary="导出公众号列表")
 async def export_mps(
@@ -39,7 +64,7 @@ async def export_mps(
             mp.mp_cover,
             mp.mp_intro,
             mp.status,
-            mp.created_at.isoformat(),
+            _safe_isoformat(mp.created_at),
             mp.faker_id
         ] for mp in mps]
 
@@ -81,16 +106,17 @@ async def import_mps(
         contents = (await file.read()).decode('utf-8-sig')
         csv_reader = csv.DictReader(io.StringIO(contents))
 
-        # 验证必要字段
-        required_columns = ["公众号名称", "封面图", "简介"]
-        if not all(col in csv_reader.fieldnames for col in required_columns):
-            missing_cols = [col for col in required_columns if col not in csv_reader.fieldnames]
+        # 宽容兼容：至少要有「公众号名称」或「mp_name」
+        if not csv_reader.fieldnames:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_response(
-                    code=40001,
-                    message=f"CSV文件缺少必要列: {', '.join(missing_cols)}"
-                )
+                detail=error_response(code=40001, message="CSV文件为空或无法识别表头"),
+            )
+        has_name = ("公众号名称" in csv_reader.fieldnames) or ("mp_name" in csv_reader.fieldnames) or ("name" in csv_reader.fieldnames)
+        if not has_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_response(code=40001, message="CSV文件缺少必要列: 公众号名称/mp_name/name"),
             )
 
         # 导入数据
@@ -99,22 +125,37 @@ async def import_mps(
         skipped = 0
 
         for row in csv_reader:
-            mp_id = row["id"]
-            mp_name = row["公众号名称"]
-            mp_cover = row["封面图"]
-            mp_intro = row.get("简介", "")
+            mp_name = (row.get("公众号名称") or row.get("mp_name") or row.get("name") or "").strip()
+            if not mp_name:
+                skipped += 1
+                continue
+
+            mp_cover = (row.get("封面图") or row.get("mp_cover") or row.get("avatar") or "").strip()
+            mp_intro = (row.get("简介") or row.get("mp_intro") or row.get("description") or "").strip()
             status_val = int(row.get("状态", 1)) if row.get("状态") else 1
-            faker_id = row.get("faker_id", "")
+            faker_id = _normalize_fakeid(row.get("faker_id") or row.get("fakeid") or row.get("mp_id") or row.get("公众号ID") or "")
+            mp_id = (row.get("id") or row.get("mpid") or "").strip()
+            if not mp_id:
+                mp_id = f"MP_WXS_{faker_id}" if faker_id else f"MP_WXS_{uuid.uuid4().hex[:12]}"
 
             # 检查是否已存在
-            existing = session.query(Feed).filter(Feed.faker_id == faker_id).first()
+            existing = None
+            if faker_id:
+                existing = session.query(Feed).filter(Feed.faker_id == faker_id).first()
+            if not existing and mp_id:
+                existing = session.query(Feed).filter(Feed.id == mp_id).first()
 
             if existing:
                 # 更新现有记录
-                existing.mp_cover = mp_cover
-                existing.mp_intro = mp_intro
+                existing.mp_name = mp_name or existing.mp_name
+                existing.mp_cover = mp_cover or existing.mp_cover
+                existing.mp_intro = mp_intro or existing.mp_intro
                 existing.status = status_val
-                existing.faker_id = faker_id
+                if faker_id:
+                    existing.faker_id = faker_id
+                existing.updated_at = datetime.now()
+                if not existing.created_at:
+                    existing.created_at = existing.updated_at
                 updated += 1
             else:
                 # 创建新记录
@@ -125,12 +166,9 @@ async def import_mps(
                     mp_intro=mp_intro,
                     status=status_val,
                     faker_id=faker_id,
-                    created_at=datetime.now()
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
                 )
-                import base64
-                if mp.id == None:
-                    _mp_id=base64.b64decode(faker_id).decode("utf-8")
-                    mp.id=f"MP_WXS_{_mp_id}"
                 session.add(mp)
                 imported += 1
 

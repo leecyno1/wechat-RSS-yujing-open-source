@@ -69,6 +69,10 @@ class WeChatAPI:
             'Upgrade-Insecure-Requests': '1',
             'Referer': 'https://mp.weixin.qq.com/'
         })
+        # QR code lifecycle
+        self.qr_generated_at: float | None = None
+        self.qr_expires_in: int = 120  # seconds (WeChat QR often expires quickly)
+        self._qr_session_id: str | None = None
      
     def get_qr_code(self, callback: Optional[Callable] = None, notice: Optional[Callable] = None) -> Dict[str, Any]:
         """
@@ -83,17 +87,19 @@ class WeChatAPI:
         """
         self.__init__()
         if self.check_lock():
-            print_warning("微信公众平台登录脚本正在运行，请勿重复运行")
+            print_warning("微信公众平台登录脚本正在运行，请稍后重试")
             return {
-                'code': None,
-                'is_exists': False,
-                'msg': '微信公众平台登录脚本正在运行，请勿重复运行'
+                "code": f"{self.qr_code_path}?t={int(time.time())}",
+                "is_exists": os.path.exists(self.qr_code_path),
+                "expires_in": self.qr_expires_in,
+                "msg": "微信公众平台登录脚本正在运行，请稍后重试",
             }
         with self._lock:
             self.login_callback = callback
             self.notice_callback = notice
             
             try:
+                self.set_lock()
                 # 获取登录页面
                 response = self.session.get(self.login_url)
                 response.raise_for_status()
@@ -104,21 +110,24 @@ class WeChatAPI:
                 if qr_info:
                     # 生成二维码图片
                     self._generate_qr_image(qr_info['qr_url'])
-                    self.set_lock()
+                    self.qr_generated_at = time.time()
+                    self._qr_session_id = self._generate_uuid()
                     # 启动登录状态检查
-                    self._start_login_check(qr_info['uuid'])
+                    self._start_login_check(qr_info['uuid'], self._qr_session_id, self.qr_generated_at)
                     if  self.notice_callback is not None:
                         self.notice_callback()
                     return {
                         'code': f"{self.qr_code_path}?t={int(time.time())}",
                         'is_exists': os.path.exists(self.qr_code_path),
                         'uuid': qr_info['uuid'],
+                        'expires_in': self.qr_expires_in,
                         'msg': '请使用微信扫描二维码登录'
                     }
                 else:
                     return {
                         'code': None,
                         'is_exists': False,
+                        'expires_in': self.qr_expires_in,
                         'msg': '获取二维码失败'
                     }
                     
@@ -127,8 +136,12 @@ class WeChatAPI:
                 return {
                     'code': None,
                     'is_exists': False,
+                    'expires_in': self.qr_expires_in,
                     'msg': f'获取二维码失败: {str(e)}'
                 }
+            finally:
+                # Lock only guards QR generation, not the whole login polling
+                self.release_lock()
 
     def _extract_qr_info(self, html_content: str) -> Optional[Dict[str, str]]:
         """
@@ -370,7 +383,7 @@ class WeChatAPI:
         except Exception as e:
             logger.error(f"生成二维码图片失败: {str(e)}")
 
-    def _start_login_check(self, uuid: str):
+    def _start_login_check(self, uuid: str, session_id: str, started_at: float):
         """
         启动登录状态检查
         
@@ -379,12 +392,24 @@ class WeChatAPI:
         """
         def check_login():
             try:
+                # If a newer QR session has been issued, stop this polling loop.
+                if self._qr_session_id != session_id:
+                    return
+
+                # Expire polling after TTL to avoid stale QR lingering.
+                if started_at and (time.time() - started_at) > self.qr_expires_in:
+                    if self.notice_callback:
+                        self.notice_callback('二维码已过期，请刷新二维码')
+                    self._clean_qr_code()
+                    return
+
                 # 检查登录状态
                 status = self._check_login_status(uuid)
                 if status == 'success':
                     self._islogin=True
                     self._handle_login_success()
-                elif status == 'waiting':
+                    return
+                elif status in ('waiting', 'wait'):
                     # 继续等待
                     Timer(2.0, check_login).start()
                 elif status == 'scanned':
@@ -396,6 +421,7 @@ class WeChatAPI:
                     # 二维码过期
                     if self.notice_callback:
                         self.notice_callback('二维码已过期，请重新获取')
+                    self._clean_qr_code()
                     return
                 elif status == 'exists':
                     return
@@ -408,8 +434,6 @@ class WeChatAPI:
                 if self.notice_callback:
                     self.notice_callback('检查登录状态失败,请重试')
                 # Timer(5.0, check_login).start()  # 出错后延长检查间隔
-            finally:
-                self.release_lock()
         # 启动检查
         Timer(2.0, check_login).start()
 
@@ -883,11 +907,20 @@ class WeChatAPI:
         }      
     def GetCode(self,CallBack=None,Notice=None):
         from core.print import print_warning
+        # If an existing QR is too old, force refresh by deleting it.
+        try:
+            # Always refresh QR on user request to avoid scanning a stale code.
+            if self.GetHasCode():
+                self._clean_qr_code()
+        except Exception:
+            pass
+
         if self.check_lock():
-            print_warning("微信公众平台登录脚本正在运行，请勿重复运行")
+            print_warning("微信公众平台登录脚本正在运行，请稍后重试")
             return {
                 "code":f"/{self.wx_login_url}?t={(time.time())}",
                 "is_exists":self.GetHasCode(),
+                "expires_in": self.qr_expires_in,
             }
         from core.print import print_warning
         from core.thread import ThreadManager
@@ -898,6 +931,7 @@ class WeChatAPI:
         return {
             "code":f"/{self.wx_login_url}?t={(time.time())}",
             "is_exists":self.GetHasCode(),
+            "expires_in": self.qr_expires_in,
         }
     def GetHasCode(self):
         if os.path.exists(self.wx_login_url):
@@ -905,8 +939,22 @@ class WeChatAPI:
         return False
     def check_lock(self):
         """检查锁定状态"""
-        time.sleep(1)
-        return os.path.exists(self.lock_file_path) or self.GetHasCode()
+        # Only treat lock-file as in-progress indicator; QR image existing != locked.
+        try:
+            if not os.path.exists(self.lock_file_path):
+                return False
+            # if lock is stale, clear it
+            try:
+                with open(self.lock_file_path, 'r') as f:
+                    t = float((f.read() or "0").strip())
+            except Exception:
+                t = os.path.getmtime(self.lock_file_path)
+            if t and (time.time() - t) > 30:
+                self.release_lock()
+                return False
+            return True
+        except Exception:
+            return False
     def set_lock(self):
         """创建锁定文件"""
         with open(self.lock_file_path, 'w') as f:

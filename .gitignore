@@ -20,3 +20,8 @@ doc2pdf/*.docx
 doc2pdf/*.pdf
 demo.txt
 test.yaml
+.env
+.env.*
+compose/.env
+compose/.env.*
+environment.sh

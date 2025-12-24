@@ -1,0 +1,39 @@
+services:
+  api:
+    image: ghcr.io/rachelos/base-full:latest
+    container_name: we-mp-rss-dev-api
+    working_dir: /src
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - DB=sqlite:///data/db.db
+      - USERNAME=admin
+      - PASSWORD=admin@123
+      - ENABLE_JOB=False
+      - AUTO_RELOAD=True
+      - THREADS=1
+      - INSTALL=False
+      - SILICONFLOW_API_URL=https://api.siliconflow.cn/v1
+      - SILICONFLOW_MODEL=Qwen/Qwen3-30B-A3B
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+    volumes:
+      - ..:/src
+      - ../data:/src/data
+    command: bash -lc "source /app/$(uname -m)/bin/activate && test -f config.yaml || cp config.example.yaml config.yaml && python3 main.py -job True -init True"
+
+  ui:
+    image: docker.1ms.run/node:20-bookworm-slim
+    container_name: we-mp-rss-dev-ui
+    working_dir: /ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_BASE_URL=http://api:8001/
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ../web_ui:/ui
+    command: sh -lc "corepack enable && yarn install --frozen-lockfile && yarn dev --host 0.0.0.0 --port 3000"
+    depends_on:
+      - api

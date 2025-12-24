@@ -1,0 +1,24 @@
+version: '3.9'
+services:
+  we-mp-rss:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: we-mp-rss-local:latest
+    container_name: we-mp-rss
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./.env.local
+    environment:
+      - DB=sqlite:///data/db.db
+      - USERNAME=admin
+      - PASSWORD=admin@123
+      # 本地快速启动建议关闭（采集功能如需浏览器再打开）
+      - INSTALL=False
+      # 正式版默认关闭代码热重载（需要改的话在 env 里改 AUTO_RELOAD=True）
+      - AUTO_RELOAD=False
+      # LLM/洞察开关统一放到 compose/.env.local（本地文件，已加入 .gitignore）
+    volumes:
+      - ../data:/app/data

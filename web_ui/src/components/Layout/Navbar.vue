@@ -35,6 +35,18 @@
         </template>
         配置信息
       </a-menu-item>
+      <a-menu-item key="/favorites">
+        <template #icon>
+          <icon-star />
+        </template>
+        我的收藏
+      </a-menu-item>
+      <a-menu-item key="/channels">
+        <template #icon>
+          <icon-compass />
+        </template>
+        频道
+      </a-menu-item>
       <a-menu-item key="/sys-info">
         <template #icon>
           <icon-info-circle />

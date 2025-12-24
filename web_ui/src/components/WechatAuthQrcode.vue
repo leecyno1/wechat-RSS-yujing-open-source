@@ -15,8 +15,11 @@
       <div v-else-if="qrcodeUrl" class="qrcode" style="text-align:center;">
         <img :src="qrcodeUrl" alt="微信授权二维码" />
         <a-tooltip content="扫码请选择公众号或者服务号，如果没有帐号，请点击下方注册" placement="top">
-        <p>请使用微信扫码授权</p>
+        <p>请使用微信扫码授权（{{ countdown }}s）</p>
         </a-tooltip>
+        <a-space>
+          <a-button size="small" @click="refreshQrcode" :loading="loading">刷新二维码</a-button>
+        </a-space>
         <p>如果提示没有可用帐号码，请点此
           <a-tooltip content="注册时请选择公众号或者服务号" placement="top">
           <a-link href="https://mp.weixin.qq.com/cgi-bin/registermidpage?action=index&weblogo=1&lang=zh_CN" target="_blank">注册</a-link><br/>
@@ -33,7 +36,7 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue'
-import { QRCode, checkQRCodeStatus } from '@/api/auth'
+import { QRCode, getQRCodeStatusOnce } from '@/api/auth'
 import { Message } from '@arco-design/web-vue'
 
 const emit = defineEmits(['success', 'error'])
@@ -42,8 +45,10 @@ const visible = ref(false)
 const loading = ref(false)
 const qrcodeUrl = ref('')
 const errorMessage = ref('')
+const countdown = ref(0)
 
 let checkStatusTimer: number | null = null
+let countdownTimer: number | null = null
 
 const startAuth = async () => {
   try {
@@ -52,23 +57,34 @@ const startAuth = async () => {
     errorMessage.value = ''
     
     // 获取二维码
-    const res = await QRCode()
-    qrcodeUrl.value = res?.code
+    const res: any = await QRCode()
+    qrcodeUrl.value = res?.code || ''
     loading.value = false
 
-    // 开始检查授权状态
-        checkQRCodeStatus().then((statusRes) => {
-          if (statusRes?.login_status) {
-            clearTimer()
-            // Message.success('授权成功')
-            emit('success', statusRes)
-            visible.value = false
-          }
-        }).catch((err) => {
-          console.error('检查二维码状态失败:', err)
-          errorMessage.value = '授权失败，请重试'
-           emit('error', err)
-        })
+    // countdown & auto refresh
+    countdown.value = Number(res?.expires_in || 120)
+    if (countdownTimer) clearInterval(countdownTimer)
+    countdownTimer = window.setInterval(() => {
+      countdown.value = Math.max(0, countdown.value - 1)
+      if (countdown.value === 0) {
+        refreshQrcode()
+      }
+    }, 1000)
+
+    // polling status
+    if (checkStatusTimer) clearInterval(checkStatusTimer)
+    checkStatusTimer = window.setInterval(async () => {
+      try {
+        const statusRes: any = await getQRCodeStatusOnce()
+        if (statusRes?.login_status) {
+          clearTimer()
+          emit('success', statusRes)
+          visible.value = false
+        }
+      } catch (err) {
+        // ignore transient errors
+      }
+    }, 3000)
   } catch (err) {
     loading.value = false
     errorMessage.value = '获取二维码失败，请重试'
@@ -76,10 +92,28 @@ const startAuth = async () => {
   }
 }
 
+const refreshQrcode = async () => {
+  if (loading.value) return
+  try {
+    loading.value = true
+    const res: any = await QRCode()
+    qrcodeUrl.value = res?.code || ''
+    countdown.value = Number(res?.expires_in || 120)
+  } catch (err) {
+    Message.error('刷新二维码失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const clearTimer = () => {
   if (checkStatusTimer) {
     clearInterval(checkStatusTimer)
     checkStatusTimer = null
+  }
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
   }
 }
 
