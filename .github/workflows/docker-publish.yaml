@@ -41,3 +41,22 @@ jobs:
             --label "org.opencontainers.image.description=WeRSS 微信公众号RSS订阅服务" \
             --label "org.opencontainers.image.licenses=MIT" \
             --push .
+
+      - name: Make GHCR package public (best effort)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          PACKAGE="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
+          echo "Setting package visibility to public: ${OWNER}/${PACKAGE}"
+          curl -sS -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/users/${OWNER}/packages/container/${PACKAGE}/visibility" \
+            -d '{"visibility":"public"}' \
+            -o /tmp/ghcr-visibility.json \
+            -w "HTTP %{http_code}\n"
+          cat /tmp/ghcr-visibility.json || true
