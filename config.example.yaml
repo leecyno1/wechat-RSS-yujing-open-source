@@ -149,3 +149,13 @@ llm:
 service:
   # 逗号分隔；通过请求头 X-API-Key 访问 /api/v1/wx/service/*
   api_keys: ${SERVICE_API_KEYS:-}
+
+# 自动全量更新（已添加订阅的所有公众号）
+auto_update:
+  enable: ${AUTO_UPDATE_ENABLE:-False}
+  # 每天三次全量更新（本地时区由 TZ 控制，建议 Asia/Shanghai）
+  cron_morning: ${AUTO_UPDATE_CRON_MORNING:-0 6 * * *}
+  cron_afternoon: ${AUTO_UPDATE_CRON_AFTERNOON:-0 15 * * *}
+  cron_evening: ${AUTO_UPDATE_CRON_EVENING:-0 21 * * *}
+  # 每次更新每个公众号抓取页数（越大越慢）
+  max_page: ${AUTO_UPDATE_MAX_PAGE:-1}

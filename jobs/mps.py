@@ -119,6 +119,12 @@ def start_all_task():
     from jobs.fetch_no_article import start_sync_content
     start_sync_content()
     start_job()
+    try:
+        from jobs.auto_update import start_auto_update
+
+        start_auto_update()
+    except Exception as e:
+        print_error(f"启动自动全量更新失败: {e}")
 if __name__ == '__main__':
     # do_job()
     # start_all_task()
