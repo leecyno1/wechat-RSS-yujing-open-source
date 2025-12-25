@@ -1,9 +1,13 @@
 #!/bin/bash
 plantform="$(uname -m)"
-PLANT_PATH=${PLANT_PATH:-/app/data/}
-plant=$PLANT_PATH_$plantform
-python3 -m venv $plant
-source $plant/bin/activate
+
+# Persistent path for venv/cache. Recommended to mount this as a volume in containers.
+PLANT_PATH=${PLANT_PATH:-/app/data}
+PLANT_PATH="${PLANT_PATH%/}"
+
+plant="${PLANT_PATH}/venv_${plantform}"
+python3 -m venv "$plant"
+source "$plant/bin/activate"
 echo "使用虚拟环境: $plant"
 
 
@@ -72,7 +76,7 @@ source $plant/bin/activate">/etc/profile
 # 检查requirements.txt更新
 if [ -f "requirements.txt" ]; then
     CURRENT_MD5=$(md5sum requirements.txt | cut -d' ' -f1)
-    OLD_MD5_FILE="$PLANT_PATH/requirements.txt.md5"
+    OLD_MD5_FILE="$plant/requirements.txt.md5"
     
     if [ -f "$OLD_MD5_FILE" ] && [ "$CURRENT_MD5" = "$(cat $OLD_MD5_FILE)" ]; then
         echo "requirements.txt未更新，跳过安装"
