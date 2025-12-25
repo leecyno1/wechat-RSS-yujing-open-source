@@ -1,34 +1,34 @@
-from core.models import Article,Feed,DATA_STATUS
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+
 from core.db import DB
-import json
-class ArticleInfo():
-    #没有内容的文章数量
-    no_content_count:int=0
-    #有内容的文章数量
-    has_content_count:int=0
-    #所有文章数量
-    all_count:int=0
-    #不正常的文章数量
-    wrong_count:int=0
-    #公众号总数
-    mp_all_count:int=0
-def laxArticle():
-    info=ArticleInfo()
-    session=DB.get_session()
-    #获取没有内容的文章数量
-    info.no_content_count=session.query(Article).filter(Article.content == None).count()
-    #所有文章数量
-    info.all_count=session.query(Article).count()
-    #有内容的文章数量
-    info.has_content_count=info.all_count-info.no_content_count
+from core.models import Article, DATA_STATUS, Feed
 
-    #获取删除的文章
-    info.wrong_count=session.query(Article).filter(Article.status !=DATA_STATUS.ACTIVE ).count()
 
-    #公众号总数
-    info.mp_all_count=session.query(Feed).distinct(Feed.id).count()
-    # session.close()
-    return info.__dict__
-    pass
-ARTICLE_INFO=laxArticle()
-print(ARTICLE_INFO)
+@dataclass
+class ArticleInfo:
+    no_content_count: int = 0
+    has_content_count: int = 0
+    all_count: int = 0
+    wrong_count: int = 0
+    mp_all_count: int = 0
+    error: str = ""
+
+
+def laxArticle() -> dict:
+    """Return lightweight article stats.
+
+    IMPORTANT: Do not touch DB at import-time; this must be called lazily.
+    """
+    info = ArticleInfo()
+    try:
+        session = DB.get_session()
+        info.no_content_count = session.query(Article).filter(Article.content.is_(None)).count()
+        info.all_count = session.query(Article).count()
+        info.has_content_count = max(0, int(info.all_count) - int(info.no_content_count))
+        info.wrong_count = session.query(Article).filter(Article.status != DATA_STATUS.ACTIVE).count()
+        info.mp_all_count = session.query(Feed).distinct(Feed.id).count()
+    except Exception as e:
+        info.error = str(e)
+    return asdict(info)

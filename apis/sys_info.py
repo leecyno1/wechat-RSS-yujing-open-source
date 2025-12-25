@@ -64,7 +64,7 @@ async def system_resources(
             code=50002,
             message=f"获取系统资源失败: {str(e)}"
         )
-from core.article_lax import ARTICLE_INFO,laxArticle
+from core.article_lax import laxArticle
 from .ver import API_VERSION
 from core.base import VERSION as CORE_VERSION,LATEST_VERSION
 @router.get("/info", summary="获取系统信息")
@@ -108,7 +108,7 @@ async def get_system_info(
                 "info":getLoginInfo(),
                 "login":getStatus(),
             },
-            "article":ARTICLE_INFO,
+            "article": laxArticle(),
             'queue':TaskQueue.get_queue_info(),
         }
         return success_response(data=system_info)
