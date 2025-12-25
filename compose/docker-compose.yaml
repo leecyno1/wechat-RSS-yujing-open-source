@@ -17,7 +17,7 @@ services:
       - ./mysql-init:/docker-entrypoint-initdb.d
 
   we-mp-rss:
-    image: ghcr.io/rachelos/we-mp-rss:latest
+    image: ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
     container_name: we-mp-rss
     restart: unless-stopped
     ports:

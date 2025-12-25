@@ -9,7 +9,7 @@
 
 快速运行
 ```
-docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
+docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 ```
 http://<您的ip>:8001/  即可开启
 
@@ -18,9 +18,9 @@ http://<您的ip>:8001/  即可开启
 ```
 docker stop we-mp-rss
 docker rm we-mp-rss
-docker pull ghcr.io/rachelos/we-mp-rss:latest
+docker pull ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 # 如果添加了其它参数，请自行修改
-docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
+docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 ```
 
 # 官方镜像

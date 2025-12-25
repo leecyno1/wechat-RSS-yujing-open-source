@@ -7,6 +7,7 @@ permissions:
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -30,11 +31,12 @@ jobs:
 
       - name: Build and Push Multi-platform Docker Image
         run: |
-          echo "Building multi-arch image: ${{ github.repository }}"
+          REPO_LOWER="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "Building multi-arch image: ${REPO_LOWER}"
           docker buildx create --name multiarch --use 2>/dev/null || docker buildx use multiarch
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/${{ github.repository }}:latest \
+            --tag ghcr.io/${REPO_LOWER}:latest \
             --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             --label "org.opencontainers.image.description=WeRSS 微信公众号RSS订阅服务" \
             --label "org.opencontainers.image.licenses=MIT" \

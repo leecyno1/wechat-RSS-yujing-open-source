@@ -9,7 +9,7 @@
 
 Quick Start
 ```
-docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
+docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 ```
 Visit http://<your-ip>:8001/ to get started
 
@@ -18,9 +18,9 @@ Visit http://<your-ip>:8001/ to get started
 ```
 docker stop we-mp-rss
 docker rm we-mp-rss
-docker pull ghcr.io/rachelos/we-mp-rss:latest
+docker pull ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 # If you added other parameters, please modify accordingly
-docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/rachelos/we-mp-rss:latest
+docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
 ```
 
 # Official Image
