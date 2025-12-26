@@ -222,6 +222,7 @@ async def get_articles(
     status: str = Query(None),
     search: str = Query(None),
     mp_id: str = Query(None),
+    mp_ids: str = Query(None, description="逗号分隔的多个公众号ID，用于专题/批量过滤"),
     has_content:bool=Query(False),
     unread_only: bool = Query(False, description="仅返回未读文章"),
     current_user: dict = Depends(get_current_user)
@@ -240,6 +241,13 @@ async def get_articles(
             query = query.filter(Article.status != DATA_STATUS.DELETED)
         if mp_id:
             query = query.filter(Article.mp_id == mp_id)
+        elif mp_ids:
+            try:
+                ids = [x.strip() for x in str(mp_ids).split(",") if x.strip()]
+            except Exception:
+                ids = []
+            if ids:
+                query = query.filter(Article.mp_id.in_(ids))
         if unread_only:
             query = query.filter(Article.is_read == 0)
         if search:

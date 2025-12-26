@@ -32,6 +32,17 @@ export const markAllRead = (params?: { mp_id?: string; kw?: string }) => {
   return http.post<{ updated: number }>('/wx/channels/read_all', null, {
     params: {
       mp_id: params?.mp_id ?? null,
+      mp_ids: null,
+      kw: params?.kw ?? ''
+    }
+  })
+}
+
+export const markAllReadMulti = (params: { mp_ids: string[]; kw?: string }) => {
+  return http.post<{ updated: number }>('/wx/channels/read_all', null, {
+    params: {
+      mp_id: null,
+      mp_ids: (params?.mp_ids || []).join(','),
       kw: params?.kw ?? ''
     }
   })
@@ -45,6 +56,7 @@ export const setArticleRead = (articleId: string, isRead: boolean) => {
 
 export const getChannelArticles = (params: {
   mp_id?: string
+  mp_ids?: string[]
   search?: string
   limit?: number
   offset?: number
@@ -53,6 +65,7 @@ export const getChannelArticles = (params: {
   return http.get<{ list: any[]; total: number }>('/wx/articles', {
     params: {
       mp_id: params.mp_id || null,
+      mp_ids: params.mp_ids?.length ? params.mp_ids.join(',') : null,
       search: params.search || null,
       limit: params.limit ?? 30,
       offset: params.offset ?? 0,

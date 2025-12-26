@@ -178,13 +178,21 @@ async def list_channel_feeds(
 @router.post("/read_all", summary="全部已读(按频道/关键词)")
 async def mark_all_read(
     mp_id: str | None = Query(None, description="频道ID；为空表示全部"),
+    mp_ids: str | None = Query(None, description="逗号分隔的多个频道ID；优先于 mp_id"),
     kw: str = Query("", description="可选：仅标记标题包含关键词的文章"),
     current_user: dict = Depends(get_current_user),
 ):
     session = DB.get_session()
     try:
         query = session.query(ArticleBase).filter(ArticleBase.status != DATA_STATUS.DELETED).filter(ArticleBase.is_read == 0)
-        if mp_id:
+        if mp_ids:
+            try:
+                ids = [x.strip() for x in str(mp_ids).split(",") if x.strip()]
+            except Exception:
+                ids = []
+            if ids:
+                query = query.filter(ArticleBase.mp_id.in_(ids))
+        elif mp_id:
             query = query.filter(ArticleBase.mp_id == mp_id)
         if kw:
             query = query.filter(ArticleBase.title.like(f"%{kw}%"))
