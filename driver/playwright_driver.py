@@ -60,7 +60,7 @@ class PlaywrightController:
     def start_browser(self, headless=True, mobile_mode=False, dis_image=True, browser_name=browsers_name, language="zh-CN", anti_crawler=True):
         try:
             # 使用线程锁确保线程安全
-            if  os.getenv("NOT_HEADLESS",False)==True:
+            if  str(os.getenv("NOT_HEADLESS",False))=="True":
                 headless = False
             else:
                 headless = True

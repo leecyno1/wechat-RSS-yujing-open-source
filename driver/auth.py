@@ -4,6 +4,7 @@ import os
 import portalocker
 from core.task import TaskScheduler
 from driver.success import Success
+from core.print import print_warning
 
 def auth():
     # 使用文件锁确保只有一个进程执行
@@ -22,10 +23,12 @@ def auth():
     except portalocker.exceptions.LockException:
         # 其他进程直接返回
         pass
-if os.getenv('WE_RSS.AUTH',False):
+if str(os.getenv('WE_RSS.AUTH',False))=="True":
+    print_warning("启动授权定时任务")
     auth_task=TaskScheduler()
     auth_task.clear_all_jobs()
-    if os.getenv('DEBUG',False):
+    print("是否开启调试模式:",str(os.getenv('DEBUG',False)))
+    if str(os.getenv('DEBUG',False))=="True":
         auth_task.add_cron_job(auth, "*/1 * * * *",tag="授权定时更新")
     else:
         auth_task.add_cron_job(auth, "0 */1 * * *",tag="授权定时更新")
