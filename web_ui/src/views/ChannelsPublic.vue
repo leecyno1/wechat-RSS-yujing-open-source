@@ -80,7 +80,7 @@
               <a-button size="small" type="outline" @click="goTopics">管理专题</a-button>
             </div>
             <a-list :bordered="false" class="channel-list">
-              <a-list-item v-for="t in topics" :key="t.id" class="channel-item" @click="selectTopic(t)">
+              <a-list-item v-for="t in topics" :key="t.id" class="channel-item" @click.stop="selectTopic(t)">
                 <div class="channel-item-row" :title="t.intro || t.name">
                   <a-avatar :size="20">
                     <img :src="t.cover ? (baseUrl + t.cover) : '/static/logo.svg'" />
