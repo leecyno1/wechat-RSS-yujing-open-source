@@ -14,7 +14,7 @@
               class="tab-btn"
               :type="leftTab === 'feeds' ? 'primary' : 'outline'"
               size="small"
-              @click="leftTab = 'feeds'"
+              @click="showAllFeeds"
             >
               全部订阅
               <a-badge v-if="feedsStats.unread_total" :count="feedsStats.unread_total" :max-count="99" />
@@ -354,50 +354,76 @@ const groupedArticles = computed(() => {
     .map(date => ({ date, items: groups[date] }))
 })
 
-const leftTab = ref<'feeds' | 'topics'>('feeds')
-const feedSort = ref('recent')
-const articleSort = ref('time')
-const unreadOnly = ref(false)
-const backfillPages = ref<number>(10)
-const topics = ref<any[]>([])
-const feedsStats = ref({ unread_total: 0, article_total: 0, feed_total: 0 })
+	const leftTab = ref<'feeds' | 'topics'>('feeds')
+	const feedSort = ref('recent')
+	const articleSort = ref('time')
+	const unreadOnly = ref(false)
+	const backfillPages = ref<number>(10)
+	const topics = ref<any[]>([])
+	const feedsStats = ref({ unread_total: 0, article_total: 0, feed_total: 0 })
+	const activeTopic = ref<any | null>(null)
+	const activeTopicFeedIds = ref<string[]>([])
 
-const loadTopics = async () => {
-  try {
-    const res: any = await listTags({ offset: 0, limit: 200 })
-    topics.value = res?.list || res || []
-  } catch {
-    topics.value = []
-  }
-}
+	const showAllFeeds = async () => {
+	  activeTopic.value = null
+	  activeTopicFeedIds.value = []
+	  leftTab.value = 'feeds'
+	  await loadFeeds()
+	}
 
-const loadFeeds = async () => {
-  channelsLoading.value = true
-  try {
-    if (hasToken.value) {
-      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
-      channels.value = res.list || []
-      feedsStats.value = res.stats || feedsStats.value
-    } else {
-      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
-      channels.value = (res.list || []).map((c: any) => ({ ...c, unread_count: 0, article_count: 0, latest_publish_time: 0 }))
-      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
-    }
+	const loadTopics = async () => {
+	  try {
+	    const res: any = await listTags({ offset: 0, limit: 200 })
+	    topics.value = res?.list || res || []
+	  } catch {
+	    topics.value = []
+	  }
+	}
 
-    if (!activeChannelId.value) {
-      const q = (route.query.channel_id as string) || ''
-      if (q && (q === 'all' || channels.value.some(c => c.id === q))) {
-        selectChannel(q, true)
-      } else if (channels.value.length) {
-        selectChannel(channels.value[0].id, true)
-      }
-    }
-  } catch (e: any) {
-    Message.error(e?.message || '加载频道失败')
-  } finally {
-    channelsLoading.value = false
-  }
-}
+	const loadFeeds = async () => {
+	  channelsLoading.value = true
+	  try {
+	    if (hasToken.value) {
+	      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
+	      channels.value = res.list || []
+	      feedsStats.value = res.stats || feedsStats.value
+	    } else {
+	      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
+	      channels.value = (res.list || []).map((c: any) => ({ ...c, unread_count: 0, article_count: 0, latest_publish_time: 0 }))
+	      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
+	    }
+
+	    // If a topic is selected, keep feeds list constrained to that topic.
+	    if (activeTopicFeedIds.value.length) {
+	      const ids = new Set(activeTopicFeedIds.value)
+	      channels.value = channels.value.filter(c => ids.has(String(c.id)))
+	      feedsStats.value = {
+	        unread_total: channels.value.reduce((acc, c: any) => acc + Number(c.unread_count || 0), 0),
+	        article_total: channels.value.reduce((acc, c: any) => acc + Number(c.article_count || 0), 0),
+	        feed_total: channels.value.length
+	      }
+	    }
+
+	    if (!activeChannelId.value) {
+	      const q = (route.query.channel_id as string) || ''
+	      if (q && (q === 'all' || channels.value.some(c => c.id === q))) {
+	        selectChannel(q, true)
+	      } else if (channels.value.length) {
+	        selectChannel(channels.value[0].id, true)
+	      }
+	    } else if (activeTopicFeedIds.value.length && activeChannelId.value !== 'all') {
+	      // If current channel not in the topic set, reset to the first available.
+	      const ids = new Set(activeTopicFeedIds.value)
+	      if (!ids.has(String(activeChannelId.value)) && channels.value.length) {
+	        selectChannel(channels.value[0].id, true)
+	      }
+	    }
+	  } catch (e: any) {
+	    Message.error(e?.message || '加载频道失败')
+	  } finally {
+	    channelsLoading.value = false
+	  }
+	}
 
 const maybeAutoUpdateChannel = async (mpId: string) => {
   if (!hasToken.value) return
@@ -488,12 +514,16 @@ const loadInsight = async (articleId: string) => {
   }
 }
 
-const selectChannel = async (id: string, silent?: boolean) => {
-  activeChannelId.value = id
-  activeArticleId.value = ''
-  activeArticleTitle.value = ''
-  insight.value = null
-  const ch = channels.value.find(c => c.id === id)
+	const selectChannel = async (id: string, silent?: boolean) => {
+	  if (id === 'all') {
+	    activeTopic.value = null
+	    activeTopicFeedIds.value = []
+	  }
+	  activeChannelId.value = id
+	  activeArticleId.value = ''
+	  activeArticleTitle.value = ''
+	  insight.value = null
+	  const ch = channels.value.find(c => c.id === id)
   activeChannelName.value = id === 'all' ? '全部订阅' : ch?.name || ''
   if (!silent) {
     router.replace({ path: '/channels', query: { channel_id: id } })
@@ -618,21 +648,19 @@ const markAllReadForCurrent = async () => {
 const goPlaza = () => router.push('/add-subscription')
 const goCreateChannel = () => router.push('/tags/add')
 const goExport = () => router.push('/export/records')
-const goTopics = () => router.push('/tags')
+	const goTopics = () => router.push('/tags')
 
-const selectTopic = async (t: any) => {
-  leftTab.value = 'feeds'
-  try {
-    const ids = JSON.parse(t.mps_id || '[]').map((x: any) => String(x.id || x))
-    // filter feeds list to the topic set
-    channels.value = channels.value.filter(c => ids.includes(c.id))
-    if (channels.value.length) {
-      await selectChannel(channels.value[0].id)
-    }
-  } catch {
-    Message.error('专题数据异常')
-  }
-}
+	const selectTopic = async (t: any) => {
+	  try {
+	    activeTopic.value = t
+	    activeTopicFeedIds.value = JSON.parse(t.mps_id || '[]').map((x: any) => String(x.id || x))
+	    leftTab.value = 'feeds'
+	    await loadFeeds()
+	    if (channels.value.length) await selectChannel(channels.value[0].id)
+	  } catch {
+	    Message.error('专题数据异常')
+	  }
+	}
 
 watch(
   () => route.query.channel_id,
