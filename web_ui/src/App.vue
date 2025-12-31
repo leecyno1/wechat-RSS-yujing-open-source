@@ -171,7 +171,7 @@ const showAuthQrcode = () => {
 }
 provide('showAuthQrcode', showAuthQrcode)
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || '微信公众号订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
 const logo = ref('/static/logo.svg')
 const router = useRouter()
 const route = useRoute()
@@ -356,4 +356,3 @@ watch(
   }
 }
 </style>
-

@@ -78,7 +78,7 @@
     </template>
   </a-drawer>
 
-  <a-drawer id="article-modal" v-model:visible="articleModalVisible" title="WeRss" placement="left" width="100vw"
+  <a-drawer id="article-modal" v-model:visible="articleModalVisible" title="Dr.Lemon订阅助手" placement="left" width="100vw"
     :footer="false" :fullscreen="false">
     <div style="padding: 20px; overflow-y: auto;clear:both;">
       <div>

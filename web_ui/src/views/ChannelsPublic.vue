@@ -102,7 +102,7 @@
               <a-option value="time">按时间</a-option>
             </a-select>
             <a-switch v-model="unreadOnly" size="small" @change="loadArticles" />
-            <span class="muted">仅看未读</span>
+            <span class="muted">未读</span>
           </div>
           <div class="toolbar-right">
             <a-tag v-if="activeChannelName" color="blue">{{ activeChannelName }}</a-tag>

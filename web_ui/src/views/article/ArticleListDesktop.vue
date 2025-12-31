@@ -58,7 +58,7 @@
         </a-card>
       </a-layout-sider>
 
-      <a-layout-content :style="{ padding: '12px', width: '100%' }">
+      <a-layout-content :style="{ padding: '12px', minWidth: 0 }">
         <a-page-header :title="activeFeed ? activeFeed.name : '全部'" :subtitle="'管理您的公众号订阅内容'" :show-back="false">
           <template #extra>
             <a-space>
@@ -797,6 +797,17 @@ const toggleReadStatus = async (record: any) => {
 <style scoped>
 .article-list {
   /* height: calc(100vh - 186px); */
+  width: 100%;
+  min-width: 0;
+}
+
+.article-list :deep(.arco-layout-content) {
+  min-width: 0;
+}
+
+.article-list :deep(.arco-table-container) {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .a-layout-sider {

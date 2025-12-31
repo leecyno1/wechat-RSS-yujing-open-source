@@ -98,7 +98,7 @@
 
   <a-drawer id="article-modal"
     v-model:visible="articleModalVisible" 
-    title="WeRss"
+    title="Dr.Lemon订阅助手"
     placement="left"
     width="100vw"
     :footer="false"

@@ -4,6 +4,7 @@
       <!-- 左侧介绍区域 -->
       <div class="login-left">
         <div class="login-intro">
+          <img class="intro-logo" :src="drLemonLogo" alt="Dr.Lemon Logo" />
           <h1 class="intro-title">{{appTitle}}</h1>
           <p class="intro-text">
             一个用于订阅和管理微信公众号内容的工具，提供RSS订阅功能
@@ -65,8 +66,9 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { login } from '@/api/auth'
+import drLemonLogo from '@/assets/drlemon-logo.svg'
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || '微信公众号订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
 
 const router = useRouter()
 const loading = ref(false)
@@ -98,7 +100,7 @@ const handleSubmit = async () => {
         
             // 处理重定向
             const redirect = router.currentRoute.value.query.redirect
-            await router.push(redirect ? redirect.toString() : '/')
+            await router.push(redirect ? redirect.toString() : '/channels')
             Message.success('登录成功')
     } else {
       throw new Error('无效的响应格式')
@@ -216,6 +218,14 @@ const handleSubmit = async () => {
 .login-intro {
   max-width: 600px;
   margin-bottom: 60px;
+}
+
+.intro-logo {
+  width: 340px;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 18px;
+  display: block;
 }
 
 .intro-title {

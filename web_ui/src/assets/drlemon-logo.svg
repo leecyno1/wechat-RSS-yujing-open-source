@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="34" y1="24" x2="260" y2="292" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF6B8"/>
+      <stop offset="0.42" stop-color="#FFE66A"/>
+      <stop offset="1" stop-color="#8EE000"/>
+    </linearGradient>
+    <linearGradient id="lemon" x1="86" y1="64" x2="214" y2="252" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE56B"/>
+      <stop offset="0.55" stop-color="#FFD43A"/>
+      <stop offset="1" stop-color="#FFB700"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="164" y1="56" x2="240" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B9FF72"/>
+      <stop offset="1" stop-color="#2FB24C"/>
+    </linearGradient>
+    <filter id="softShadow" x="0" y="0" width="320" height="320" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="blur"/>
+      <feOffset dy="6"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0"/>
+      <feBlend in="SourceGraphic" in2="blur" mode="normal"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#softShadow)">
+    <rect x="24" y="24" width="272" height="272" rx="74" fill="url(#bg)"/>
+    <path
+      d="M238 106c-14-26-44-32-70-26 18-18 26-40 18-58-10-22-44-26-76-8-32 18-50 48-40 70 4 8 10 14 18 18-36 6-70 32-84 72-22 66 14 136 80 158 66 22 136-14 158-80 14-40 6-84-18-114 16-16 40-48 32-62z"
+      fill="url(#lemon)"
+      opacity="0.96"
+      transform="translate(0 6)"
+    />
+    <path
+      d="M206 94c18-22 40-32 56-28 10 2 14 10 14 18 0 16-10 34-28 52-18-18-30-28-42-42z"
+      fill="url(#leaf)"
+      opacity="0.92"
+    />
+  </g>
+
+  <g transform="translate(340 92)">
+    <text x="0" y="72" font-size="64" font-weight="800" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial" fill="#111827">
+      Dr.Lemon
+    </text>
+    <text x="0" y="138" font-size="42" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica Neue,Arial" fill="#374151">
+      订阅助手
+    </text>
+  </g>
+</svg>
+
