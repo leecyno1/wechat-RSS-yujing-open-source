@@ -129,6 +129,7 @@ import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
 import { initBrowserNotification } from '@/utils/browserNotification'
 import { translatePage, setCurrentLanguage } from '@/utils/translate'
 import { getThemeMode, setThemeMode, type ThemeMode } from '@/utils/theme'
+import lemonIcon from '@/assets/lemon.svg'
 
 const languageOptions = [
   { value: '', label: '语言：禁用' },
@@ -172,7 +173,7 @@ const showAuthQrcode = () => {
 provide('showAuthQrcode', showAuthQrcode)
 
 const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
-const logo = ref('/static/logo.svg')
+const logo = lemonIcon
 const router = useRouter()
 const route = useRoute()
 

@@ -2,8 +2,20 @@
   <a-spin :loading="fullLoading" tip="正在刷新..." size="large">
     <a-layout class="article-list">
       
-      <a-layout-sider :width="180"
-        :style="{ background: 'var(--color-bg-1)', padding: '0', borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }">
+      <a-layout-sider
+        :width="180"
+        :style="{
+          background: 'var(--color-bg-1)',
+          padding: '0',
+          borderRight: '1px solid var(--color-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: '0 0 180px',
+          minWidth: '180px',
+          maxWidth: '180px',
+          width: '180px',
+        }"
+      >
         <a-card :bordered="false" title="公众号"
           :headStyle="{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-1)', zIndex: 1, border: 0 }">
           <template #extra>

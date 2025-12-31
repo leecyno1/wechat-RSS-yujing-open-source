@@ -797,6 +797,10 @@ onUnmounted(() => {
   height: 100%;
 }
 .sider {
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+  flex: 0 0 180px;
   border-right: 1px solid var(--color-neutral-3);
   background: var(--color-bg-1);
   overflow: hidden;
