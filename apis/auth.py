@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from datetime import timedelta
+from datetime import datetime, timedelta
 from core.auth import (
     authenticate_user,
     create_access_token,
     get_current_user,
+    pwd_context,
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from .ver import API_VERSION
@@ -50,6 +51,72 @@ async def set_manual_session(payload: ManualSession, current_user=Depends(get_cu
     )
     cfg.reload()
     return success_response({"ok": True})
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=2, max_length=50)
+    password: str = Field(..., min_length=6, max_length=100)
+    email: str | None = Field(None, max_length=100)
+
+
+@router.post("/register", summary="用户注册(公域可选开启)")
+async def register(payload: RegisterRequest):
+    if not bool(cfg.get("auth.allow_register", False)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=error_response(code=40301, message="当前未开启注册（请在配置中设置 auth.allow_register=true）"),
+        )
+
+    session = None
+    try:
+        import uuid
+        from core.models import User as DBUser
+        import core.db as db
+
+        session = db.DB.get_session()
+        username = payload.username.strip()
+        if not username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_response(code=40001, message="用户名不能为空"),
+            )
+        exists = session.query(DBUser).filter(DBUser.username == username).first()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_response(code=40002, message="用户名已存在"),
+            )
+
+        now = datetime.now()
+        u = DBUser(
+            id=str(uuid.uuid4()),
+            username=username,
+            password_hash=pwd_context.hash(payload.password),
+            email=(payload.email or "").strip(),
+            role="user",
+            permissions="[]",
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(u)
+        session.commit()
+
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(data={"sub": u.username}, expires_delta=access_token_expires)
+        return success_response(
+            {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            }
+        )
+    finally:
+        try:
+            if session is not None:
+                session.close()
+        except Exception:
+            pass
 @router.get("/qr/image", summary="获取登录二维码图片")
 async def qr_image(current_user=Depends(get_current_user)):
     return success_response(WX_API.GetHasCode())

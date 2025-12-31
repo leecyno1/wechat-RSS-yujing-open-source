@@ -12,5 +12,8 @@ from .config_management import ConfigManagement
 from .article_insight import ArticleInsight
 from .article_favorite import ArticleFavorite
 from .article_note import ArticleNote
+# 用户订阅/阅读状态（多用户隔离）
+from .user_subscription import UserSubscription
+from .user_article_state import UserArticleState
 # 导入基础模型
 from .base import *

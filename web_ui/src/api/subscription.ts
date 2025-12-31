@@ -60,12 +60,16 @@ export const getSubscriptionInfo = (url: string) => {
   return http.post<{code: number, message: string}>(`/wx/mps/by_article?url=${url}`)
 }
 
-export const deleteMpApi = (mp_id: string) => {
-  return http.delete<{code: number, message: string}>(`/wx/mps/${mp_id}`)
+export const deleteMpApi = (mp_id: string, params?: { hard?: boolean }) => {
+  return http.delete<{ code: number; message: string }>(`/wx/mps/${mp_id}`, {
+    params: { hard: params?.hard ?? false }
+  })
 }
 
-export const deleteSubscription = (mp_id: string) => {
-  return http.delete<{code: number, message: string}>(`/wx/mps/${mp_id}`)
+export const deleteSubscription = (mp_id: string, params?: { hard?: boolean }) => {
+  return http.delete<{ code: number; message: string }>(`/wx/mps/${mp_id}`, {
+    params: { hard: params?.hard ?? false }
+  })
 }
 
 // 更新订阅公众号文章列表 

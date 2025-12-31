@@ -4,6 +4,8 @@ class Tags(Base):
     __tablename__ = 'tags'
     # 标签唯一标识符，主键
     id = Column(String(255), primary_key=True)
+    # 所属用户（多用户隔离）；为空表示历史公共数据
+    user_id = Column(String(255), index=True)
     # 标签名称
     name =Column(String(255))
     # 标签封面图片URL

@@ -6,7 +6,15 @@ from core.models import User as DBUser
 from core.auth import pwd_context
 import os
 from .base import success_response, error_response
+import uuid
 router = APIRouter(prefix="/user", tags=["用户管理"])
+
+
+def _is_admin(current_user: dict) -> bool:
+    try:
+        return str(current_user.get("role") or "") == "admin" or str(current_user.get("username") or "") == "admin"
+    except Exception:
+        return False
 
 @router.get("", summary="获取用户信息")
 async def get_user_info(current_user: dict = Depends(get_current_user)):
@@ -52,7 +60,7 @@ async def get_user_list(
     session = DB.get_session()
     try:
         # 验证当前用户是否为管理员
-        if current_user["role"] != "admin":
+        if not _is_admin(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=error_response(
@@ -107,7 +115,7 @@ async def add_user(
     session = DB.get_session()
     try:
         # 验证当前用户是否为管理员
-        if current_user["role"] != "admin":
+        if not _is_admin(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=error_response(
@@ -143,11 +151,13 @@ async def add_user(
 
         # 创建新用户
         new_user = DBUser(
+            id=str(uuid.uuid4()),
             username=user_data["username"],
             password_hash=pwd_context.hash(user_data["password"]),
             email=user_data["email"],
             role=user_data.get("role", "user"),
             is_active=user_data.get("is_active", True),
+            permissions=user_data.get("permissions", "[]"),
             created_at=datetime.now(),
             updated_at=datetime.now()
         )
@@ -187,7 +197,7 @@ async def update_user_info(
             )
 
         # 检查权限：只有管理员或用户自己可以修改信息
-        if current_user["role"] != "admin" and current_user["username"] != target_username:
+        if not _is_admin(current_user) and current_user["username"] != target_username:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=error_response(
@@ -211,7 +221,7 @@ async def update_user_info(
             user.is_active = bool(update_data["is_active"])
         if "email" in update_data:
             user.email = update_data["email"]
-        if "role" in update_data and current_user["role"] == "admin":
+        if "role" in update_data and _is_admin(current_user):
             user.role = update_data["role"]
 
         user.updated_at = datetime.now()

@@ -148,6 +148,10 @@ async def list_public_channel_articles(
                 "mp_id": article.mp_id or "",
                 "mp_name": feed.mp_name or "",
                 "pic_url": article.pic_url or "",
+                "read_count": getattr(article, "read_count", None),
+                "like_count": getattr(article, "like_count", None),
+                "share_count": getattr(article, "share_count", None),
+                "recommend_count": getattr(article, "recommend_count", None),
                 "is_read": int(getattr(article, "is_read", 0) or 0),
                 "word_count": _estimate_word_count(text_for_count),
             }

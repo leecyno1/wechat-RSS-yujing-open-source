@@ -7,11 +7,11 @@
           <img :src="logo" alt="avatar" :width="60" style="margin-right:1rem;">
           <router-link to="/">{{ appTitle }}</router-link>
           <a-tooltip v-if="hasLogined" :content="!haswxLogined ? '未授权，请扫码登录' : '点我扫码授权'" position="bottom">
-            <icon-scan @click="showAuthQrcode()" :style="{ marginLeft: '10px', cursor: 'pointer', color: !haswxLogined ? '#f00' : '#000' }"/>
+            <icon-scan @click="showAuthQrcode()" :style="{ marginLeft: '10px', cursor: 'pointer', color: !haswxLogined ? 'var(--color-danger-6)' : 'var(--color-text-2)' }"/>
           </a-tooltip>
         </div>
         <a-space>
-            <a-select :defaultValue="currentLanguage" v-model:value="currentLanguage" @change="handleLanguageChange" >
+            <a-select class="lang-select" :defaultValue="currentLanguage" v-model:value="currentLanguage" @change="handleLanguageChange" size="small">
               <a-option value="">禁用</a-option>
               <a-option value="chinese_simplified">简体中文</a-option>
               <a-option value="chinese_traditional">繁體中文</a-option>
@@ -132,24 +132,13 @@
             </a-select>
         </a-space>
       </div>
+      <div class="header-center">
+        <Navbar />
+      </div>
       <div class="header-right" v-if="hasLogined">
-        <a-link href="/api/docs" target="_blank" style="margin-right: 20px;">Docs</a-link>
-        <a-link href="https://gitee.com/rachel_os/we-mp-rss" target="_blank" style="margin-right: 20px;">Gitee</a-link>
-        <a-link href="https://github.com/rachelos/we-mp-rss" target="_blank" style="margin-right: 20px;">GitHub</a-link>
-        <a-tooltip content="GitHub或者Google账户注册登录，获得首月5美元奖励。注册180+天的GitHub账户还可以解锁每月5美元的额度赠送。" position="bottom">
-          <a-link href="https://console.run.claw.cloud/signin?link=FJ0VXS42W2P9" target="_blank"
-            style="margin-right: 20px;">ClawCloud</a-link>
+        <a-tooltip content="关注后每天自动推送AI摘要与精选文章" position="bottom">
+          <a-link @click="showPromoModal" style="margin-right: 20px; cursor: pointer;" type="text">关注柠檬博士</a-link>
         </a-tooltip>
-        <a-tooltip content="如果您需要部署此项目，建议采用腾讯云服务器，您懂得" position="bottom">
-          <a-link
-            href="https://cloud.tencent.com/act/cps/redirect?redirect=2446&cps_key=f8ce741e7b24cd68141ab2115122ea94&from=console"
-            target="_blank" style="margin-right: 20px;">云部署</a-link>
-        </a-tooltip>
-        <a-tooltip content="您的支持是作者的最大动力，来一杯咖啡吧" position="bottom">
-          <a-link @click="showSponsorModal" style="margin-right: 20px; cursor: pointer;" type="text">支持</a-link>
-        </a-tooltip>
-        <a-link href="https://www.paypal.com/ncp/payment/PUA72WYLAV5KW" target="_blank"
-          style="margin-right: 20px;">赞助</a-link>
 
 
 
@@ -181,12 +170,29 @@
           </template>
         </a-dropdown>
         <WechatAuthQrcode ref="qrcodeRef" />
-        <a-modal v-model:visible="sponsorVisible" title="感谢支持" :footer="false" :style="{ zIndex: 1000 }" unmount-on-close>
+        <a-modal
+          v-model:visible="promoVisible"
+          title="关注「柠檬博士」"
+          :footer="false"
+          :style="{ zIndex: 1000 }"
+          unmount-on-close
+          @close="dismissPromo"
+        >
           <div style="text-align: center;">
-            <p>如果您觉得这个项目对您有帮助,请给Rachel来一杯Coffee吧~ </p>
-            <img src="@/assets/images/sponsor.jpg" alt="赞赏码" style="max-width: 300px; margin-top: 20px;">
-            <p>您打赏的金额将用于维护项目的运行成本，感谢您的支持！</p>
-            <p>打赏后可以发送单号到<a href="mailto:rachelos@qq.com">rachelos@qq.com</a></p>
+            <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
+            <img
+              v-if="!promoQrError"
+              :src="promoQrSrc"
+              alt="柠檬博士公众号二维码"
+              style="max-width: 320px; margin-top: 16px; border-radius: 12px;"
+              @error="promoQrError = true"
+            >
+            <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
+              二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
+            </div>
+            <div style="margin-top: 16px;">
+              <a-button type="primary" @click="dismissPromo">我已关注</a-button>
+            </div>
           </div>
         </a-modal>
       </div>
@@ -216,23 +222,31 @@ const handleLanguageChange = (language: string) => {
   setCurrentLanguage(language);
   currentLanguage.value = language;
 };
-const sponsorCount:number = parseInt(localStorage.getItem('sponsor'))|| 0
-localStorage.setItem('sponsor', (sponsorCount+1).toString())
-const sponsorVisible = ref(sponsorCount<3)
-const showSponsorModal = (e: Event) => {
-  e.preventDefault()
-  sponsorVisible.value = true
-  localStorage.setItem('sponsor',"0")
-  console.log('Sponsor modal triggered') // 添加调试日志
+
+const PROMO_SEEN_KEY = 'promo_lemon_doctor_seen_v1'
+const promoVisible = ref(false)
+const promoQrSrc = computed(() => `/api/v1/wx/sys/promo/qr?v=1`)
+const promoQrError = ref(false)
+
+const showPromoModal = (e?: Event) => {
+  if (e) e.preventDefault()
+  promoQrError.value = false
+  promoVisible.value = true
+}
+
+const dismissPromo = () => {
+  promoVisible.value = false
+  localStorage.setItem(PROMO_SEEN_KEY, '1')
 }
 import { 
   initBrowserNotification 
 } from '@/utils/browserNotification'
-import { useRouter, useRoute } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
-import { getCurrentUser } from '@/api/auth'
-import { logout } from '@/api/auth'
-import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
+	import { useRouter, useRoute } from 'vue-router'
+	import { Message } from '@arco-design/web-vue'
+	import { getCurrentUser } from '@/api/auth'
+	import { logout } from '@/api/auth'
+	import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
+	import Navbar from '@/components/Layout/Navbar.vue'
 
 const qrcodeRef = ref()
 const showAuthQrcode = () => {
@@ -307,6 +321,11 @@ onMounted(() => {
   initBrowserNotification()
   translatePage();
   fetchSysInfo();
+
+  // Show promo modal once per device (logged-in users only).
+  if (isAuthenticated.value && !localStorage.getItem(PROMO_SEEN_KEY)) {
+    promoVisible.value = true
+  }
 })
 import { translatePage, setCurrentLanguage } from '@/utils/translate';
 
@@ -316,6 +335,9 @@ watch(
     hasLogined.value = !!localStorage.getItem('token')
     if (hasLogined.value) {
       fetchUserInfo()
+      if (!localStorage.getItem(PROMO_SEEN_KEY)) {
+        promoVisible.value = true
+      }
     }
   }
 )
@@ -329,24 +351,48 @@ watch(
 
 .app-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  height: 64px;
-  background: var(--color-bg-2);
+  gap: 12px;
+  padding: 0 16px;
+  height: var(--app-header-height);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: color-mix(in srgb, var(--color-bg-2) 92%, transparent);
+  backdrop-filter: saturate(180%) blur(14px);
   border-bottom: 1px solid var(--color-border);
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.lang-select {
+  width: 120px;
+}
+
+.header-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.header-center::-webkit-scrollbar {
+  display: none;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
 }
 
 .logo svg {
@@ -373,7 +419,7 @@ watch(
 .app-content {
   /* padding: 20px; */
   background: var(--color-bg-1);
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - var(--app-header-height));
 }
 
 .fade-enter-active,
@@ -388,6 +434,9 @@ watch(
 
 @media (max-width: 720px) {
   .app-header .header-right {
+    display: none !important;
+  }
+  .app-header :deep(.lang-select) {
     display: none !important;
   }
 }

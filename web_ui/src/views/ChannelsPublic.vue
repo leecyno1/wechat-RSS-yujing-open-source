@@ -1,7 +1,7 @@
 <template>
   <div class="channels-page">
     <a-layout class="channels-layout">
-      <a-layout-sider class="sider" :width="300">
+      <a-layout-sider class="sider" :width="220">
         <div class="sider-top">
           <div class="sider-title">
             <span>订阅</span>
@@ -48,7 +48,7 @@
               <a-list :bordered="false" class="channel-list">
               <a-list-item class="channel-item" :class="{ active: activeChannelId === 'all' }" @click="selectChannel('all')">
                 <div class="channel-item-row" title="查看所有文章">
-                  <a-avatar :size="20" :image-url="AvatarAll">
+                  <a-avatar :size="32" :image-url="AvatarAll">
                     <img :src="AvatarAll" />
                   </a-avatar>
                   <div class="channel-name">全部订阅</div>
@@ -64,7 +64,7 @@
                 @click="selectChannel(c.id)"
               >
                 <div class="channel-item-row" :title="c.intro || c.name">
-                  <a-avatar :size="20" :image-url="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'">
+                  <a-avatar :size="32" :image-url="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'">
                     <img :src="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'" />
                   </a-avatar>
                   <div class="channel-name">{{ c.name }}</div>
@@ -82,7 +82,7 @@
             <a-list :bordered="false" class="channel-list">
               <a-list-item v-for="t in topics" :key="t.id" class="channel-item" @click.stop="selectTopic(t)">
                 <div class="channel-item-row" :title="t.intro || t.name">
-                  <a-avatar :size="20">
+                  <a-avatar :size="24">
                     <img :src="t.cover ? (baseUrl + t.cover) : '/static/logo.svg'" />
                   </a-avatar>
                   <div class="channel-name">{{ t.name }}</div>
@@ -106,6 +106,9 @@
           </div>
           <div class="toolbar-right">
             <a-tag v-if="activeChannelName" color="blue">{{ activeChannelName }}</a-tag>
+            <a-button v-if="hasToken" size="small" type="primary" :loading="refreshAllLoading" @click="refreshAllSubscriptions">
+              一键刷新
+            </a-button>
             <a-button v-if="activeChannelId && activeChannelId !== 'all'" size="small" type="outline" @click="copyShareLink">
               复制分享链接
             </a-button>
@@ -241,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { ProxyImage } from '@/utils/constants'
@@ -298,6 +301,11 @@ const markAllLoading = ref(false)
 const autoUpdateLoading = ref(false)
 const autoUpdatedAt = new Map<string, number>()
 const AUTO_UPDATE_MIN_INTERVAL_MS = 2 * 60 * 1000
+const refreshAllLoading = ref(false)
+const refreshAllLastAt = ref(0)
+const REFRESH_ALL_MIN_INTERVAL_MS = 20 * 1000
+const AUTO_POLL_MS = 60 * 1000
+let pollTimer: any = null
 
 const hasToken = computed(() => !!localStorage.getItem('token'))
 const baseUrl = computed(() => (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, ''))
@@ -365,6 +373,33 @@ const leftTab = ref<'feeds' | 'topics'>('feeds')
 const activeTopic = ref<any | null>(null)
 const activeTopicFeedIds = ref<string[]>([])
 const lastFeedChannelId = ref<string>('all')
+
+const normalizeTopicMpIds = (raw: any): string[] => {
+  if (!raw) return []
+  if (Array.isArray(raw)) {
+    return raw
+      .map(x => String((x && (x.id ?? x.mp_id ?? x)) || '').trim())
+      .filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (!s) return []
+    try {
+      return normalizeTopicMpIds(JSON.parse(s))
+    } catch {
+      // Fallback for non-JSON legacy values (comma-separated).
+      return s
+        .split(',')
+        .map(x => x.trim())
+        .filter(Boolean)
+    }
+  }
+  if (typeof raw === 'object') {
+    // Fallback for unexpected shapes.
+    if (Array.isArray((raw as any).list)) return normalizeTopicMpIds((raw as any).list)
+  }
+  return []
+}
 
 const showAllFeeds = async () => {
   activeTopic.value = null
@@ -443,6 +478,38 @@ const maybeAutoUpdateChannel = async (mpId: string) => {
         loadFeeds()
         loadArticles()
       }
+    }, delay)
+  }
+}
+
+const refreshAllSubscriptions = async () => {
+  if (!hasToken.value) {
+    Message.info('请先登录')
+    return
+  }
+  if (refreshAllLoading.value) return
+  const now = Date.now()
+  if (now - refreshAllLastAt.value < REFRESH_ALL_MIN_INTERVAL_MS) {
+    Message.info('操作太频繁，请稍后再试')
+    return
+  }
+  refreshAllLastAt.value = now
+  refreshAllLoading.value = true
+  try {
+    const res: any = await UpdateMps('all', { start_page: 0, end_page: 1 })
+    const queued = Number(res?.queued || 0)
+    Message.success(queued ? `已加入刷新队列（${queued} 个公众号）` : '已触发刷新')
+  } catch (e: any) {
+    Message.error(e?.message || String(e || '刷新失败'))
+  } finally {
+    refreshAllLoading.value = false
+  }
+
+  // Backend updates in background; poll a few times to reflect fresh rows.
+  for (const delay of [2000, 6000, 12000]) {
+    setTimeout(() => {
+      loadFeeds()
+      if (activeChannelId.value) loadArticles()
     }, delay)
   }
 }
@@ -526,7 +593,10 @@ const selectChannel = async (id: string, silent?: boolean) => {
     activeChannelName.value = id === 'all' ? '全部订阅' : ch?.name || ''
   }
   if (!silent) {
-    router.replace({ path: '/channels', query: id.startsWith('topic:') ? { topic_id: id.replace(/^topic:/, '') } : { channel_id: id } })
+    const query: any = id.startsWith('topic:')
+      ? { topic_id: id.replace(/^topic:/, ''), channel_id: undefined }
+      : { channel_id: id, topic_id: undefined }
+    router.replace({ path: '/channels', query }).catch(() => {})
   }
   // Auto refresh newest articles on page refresh / channel switch.
   if (!id.startsWith('topic:')) maybeAutoUpdateChannel(id)
@@ -590,7 +660,11 @@ const onArticleDblClick = async (article: any) => {
 
 const copyShareLink = async () => {
   try {
-    const url = `${window.location.origin}/channels?channel_id=${encodeURIComponent(activeChannelId.value)}`
+    const id = String(activeChannelId.value || '')
+    const query = id.startsWith('topic:')
+      ? `topic_id=${encodeURIComponent(id.replace(/^topic:/, ''))}`
+      : `channel_id=${encodeURIComponent(id)}`
+    const url = `${window.location.origin}/channels?${query}`
     await navigator.clipboard.writeText(url)
     Message.success('已复制分享链接')
   } catch (e) {
@@ -654,15 +728,11 @@ const goCreateChannel = () => router.push('/tags/add')
 const goExport = () => router.push('/export/records')
 	const goTopics = () => router.push('/tags')
 
-const selectTopic = async (t: any) => {
-  try {
-    activeTopic.value = t
-    activeTopicFeedIds.value = JSON.parse(t.mps_id || '[]').map((x: any) => String(x.id || x))
-    leftTab.value = 'topics'
-    await selectChannel(`topic:${String(t.id)}`, false)
-  } catch {
-    Message.error('专题数据异常')
-  }
+const selectTopic = async (t: any, silent?: boolean) => {
+  activeTopic.value = t
+  activeTopicFeedIds.value = normalizeTopicMpIds(t?.mps_id)
+  leftTab.value = 'topics'
+  await selectChannel(`topic:${String(t?.id || '')}`, !!silent)
 }
 
 watch(
@@ -681,7 +751,7 @@ watch(
   (val: any) => {
     if (!val || typeof val !== 'string') return
     const t = topics.value.find(x => String(x.id) === val)
-    if (t) selectTopic(t)
+    if (t) selectTopic(t, true)
   }
 )
 
@@ -694,14 +764,34 @@ onMounted(async () => {
   const tid = (route.query.topic_id as string) || ''
   if (tid) {
     const t = topics.value.find(x => String(x.id) === tid)
-    if (t) await selectTopic(t)
+    if (t) await selectTopic(t, true)
+  }
+
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(() => {
+    if (document.hidden) return
+    if (channelsLoading.value || articlesLoading.value) return
+    if (!activeChannelId.value) return
+    loadFeeds()
+    loadArticles()
+  }, AUTO_POLL_MS)
+})
+
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  if (insightRetryTimer) {
+    clearTimeout(insightRetryTimer)
+    insightRetryTimer = null
   }
 })
 </script>
 
 <style scoped>
 .channels-page {
-  height: calc(100vh - 64px);
+  height: calc(100vh - var(--app-header-height));
 }
 .channels-layout {
   height: 100%;
@@ -715,16 +805,17 @@ onMounted(async () => {
   min-height: 0;
 }
 .sider-top {
-  padding: 12px;
+  padding: 10px 10px 8px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .sider-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 18px;
+  letter-spacing: -0.2px;
 }
 .sider-tabs {
   display: grid;
@@ -737,67 +828,74 @@ onMounted(async () => {
   align-items: center;
 }
 .sider-search {
-  padding-top: 4px;
+  padding-top: 2px;
 }
 .sider-list {
   flex: 1;
   overflow: auto;
-  padding: 6px;
+  padding: 10px;
   min-height: 0;
 }
 .sider-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 6px 10px;
+  padding: 4px 6px 6px;
 }
 .section-title {
   font-weight: 700;
   color: var(--color-text-2);
+  font-size: 13px;
+  letter-spacing: -0.2px;
 }
 .channel-list {
   padding-bottom: 8px;
 }
+.channel-list :deep(.arco-list-item) {
+  padding: 0 !important;
+  min-height: 0 !important;
+  border: none !important;
+}
+.channel-list :deep(.arco-list-item-content) {
+  padding: 0 !important;
+}
 .channel-item {
   padding: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   cursor: pointer;
-}
-.channel-item :deep(.arco-list-item) {
-  padding: 0;
-  min-height: 0;
-}
-.channel-item :deep(.arco-list-item-content) {
-  padding: 0;
+  margin: 0 0 6px;
 }
 .channel-item-row {
   width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 1px 8px;
-  border-radius: 8px;
-  min-height: 22px;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 14px;
+  min-height: 44px;
   flex-wrap: nowrap;
+  background: color-mix(in srgb, var(--color-bg-2) 85%, transparent);
+  border: 1px solid var(--color-neutral-3);
 }
 .channel-item.active {
   background: transparent;
 }
 .channel-item.active .channel-item-row {
-  background: var(--color-fill-2);
+  background: color-mix(in srgb, var(--color-fill-2) 88%, transparent);
+  border-color: var(--color-neutral-4);
 }
 .channel-item:hover {
   background: transparent;
 }
 .channel-item:hover .channel-item-row {
-  background: var(--color-fill-1);
+  background: color-mix(in srgb, var(--color-fill-1) 90%, transparent);
 }
 .channel-item.active:hover {
   background: transparent;
 }
 .channel-item.active:hover .channel-item-row {
-  background: var(--color-fill-2);
+  background: color-mix(in srgb, var(--color-fill-2) 88%, transparent);
 }
 .channel-item :deep(.arco-badge-number) {
   transform: translateY(2px);
@@ -805,18 +903,19 @@ onMounted(async () => {
 .channel-name {
   font-weight: 600;
   line-height: 20px;
-  font-size: 12px;
+  font-size: 14px;
+  letter-spacing: -0.2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
 }
 .channel-item :deep(.arco-badge-number) {
-  font-size: 11px;
-  line-height: 16px;
-  height: 16px;
-  min-width: 16px;
-  padding: 0 4px;
+  font-size: 12px;
+  line-height: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 6px;
 }
 .channel-badge {
   flex: 0 0 auto;
@@ -966,7 +1065,7 @@ onMounted(async () => {
 }
 .reader-inner {
   padding: 12px;
-  height: calc(100vh - 64px);
+  height: calc(100vh - var(--app-header-height));
   overflow: auto;
 }
 .reader-title {

@@ -149,6 +149,58 @@ class WXArticleFetcher:
         except Exception as e:
             print_error(f"提取文章ID失败: {e}")
             return ""  
+
+    def _extract_appmsgext_params(self, url: str, page=None) -> dict:
+        """Best-effort extract params needed for /mp/getappmsgext."""
+        params: dict[str, str] = {}
+        try:
+            from urllib.parse import urlparse, parse_qs
+
+            parsed = urlparse(url or "")
+            qs = parse_qs(parsed.query or "")
+            for k in ("__biz", "biz", "mid", "idx", "sn", "chksm"):
+                if k in qs and qs[k]:
+                    params[k] = str(qs[k][0])
+        except Exception:
+            pass
+
+        # Normalize biz key
+        if "__biz" not in params and "biz" in params:
+            params["__biz"] = params.get("biz", "")
+
+        # If short /s/ link, extract from HTML variables.
+        try:
+            if page is None:
+                page = getattr(self, "page", None)
+            if page is None:
+                return params
+
+            src = ""
+            try:
+                src = page.content() or ""
+            except Exception:
+                src = ""
+
+            def _find(pattern: str) -> str:
+                try:
+                    m = re.search(pattern, src)
+                    return (m.group(1) or "").strip() if m else ""
+                except Exception:
+                    return ""
+
+            if not params.get("__biz"):
+                params["__biz"] = _find(r'var\\s+biz\\s*=\\s*\"([^\"]+)\"') or self.extract_biz_from_source(url, page)
+            if not params.get("mid"):
+                params["mid"] = _find(r'var\\s+mid\\s*=\\s*\"?([0-9]+)\"?')
+            if not params.get("idx"):
+                params["idx"] = _find(r'var\\s+idx\\s*=\\s*\"?([0-9]+)\"?')
+            if not params.get("sn"):
+                params["sn"] = _find(r'var\\s+sn\\s*=\\s*\"([^\"]+)\"')
+        except Exception:
+            pass
+
+        # Clean empty
+        return {k: v for k, v in params.items() if str(v or "").strip()}
     def FixArticle(self, urls: list = [], mp_id: str = "") -> bool:
         """批量修复文章内容
         
@@ -250,16 +302,53 @@ class WXArticleFetcher:
                 "publish_time": "",
                 "content": "",
                 "images": "",
+                "read_count": None,
+                "like_count": None,
+                "share_count": None,
+                "recommend_count": None,
                 "mp_info":{
                 "mp_name":"",   
                 "logo":"",
                 "biz": "",
                 }
             }
-        self.controller.start_browser()
+        # Use mobile-like context to increase chance of stats endpoints being triggered.
+        try:
+            self.controller.start_browser(mobile_mode=True)
+        except Exception:
+            self.controller.start_browser()
        
         self.page = self.controller.page
         print_warning(f"Get:{url} Wait:{self.wait_timeout}")
+
+        # Best-effort capture of read/like/share/recommend counts via response interception.
+        captured_stats: dict = {}
+        try:
+            def _on_response(resp):
+                try:
+                    u = str(getattr(resp, "url", "") or "")
+                    if "mp/getappmsgext" not in u and "getappmsgext" not in u:
+                        return
+                    j = resp.json()
+                    if not isinstance(j, dict):
+                        return
+                    stat = j.get("appmsgstat") or j.get("appmsg_stat") or {}
+                    if isinstance(stat, dict):
+                        captured_stats.update(stat)
+                    if "read_num" in j and "read_num" not in captured_stats:
+                        captured_stats["read_num"] = j.get("read_num")
+                    if "like_num" in j and "like_num" not in captured_stats:
+                        captured_stats["like_num"] = j.get("like_num")
+                    if "share_num" in j and "share_num" not in captured_stats:
+                        captured_stats["share_num"] = j.get("share_num")
+                    if "read_like_num" in j and "read_like_num" not in captured_stats:
+                        captured_stats["read_like_num"] = j.get("read_like_num")
+                except Exception:
+                    return
+
+            self.page.on("response", _on_response)
+        except Exception:
+            pass
         try:
             from driver.token import get as get_wx_cfg
 
@@ -348,7 +437,7 @@ class WXArticleFetcher:
                 publish_time_str = page.locator("#publish_time").text_content().strip()
                 # 将发布时间转换为时间戳
                 publish_time = self.convert_publish_time_to_timestamp(publish_time_str)
-            except:
+            except Exception as e:
                 print_warning(f"获取作者和发布时间失败: {e}")
                 publish_time=""
             info["title"]=title
@@ -358,6 +447,134 @@ class WXArticleFetcher:
             info["author"]=author
             info["description"]=description
             info["topic_image"]=topic_image
+
+            # Best-effort: scroll to bottom to trigger stats request.
+            try:
+                page.evaluate("() => { window.scrollTo(0, document.body.scrollHeight); }")
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
+
+            def _parse_cn_count(raw: str):
+                try:
+                    s = str(raw or "").strip()
+                    if not s:
+                        return None
+                    s = s.replace(",", "").replace("阅读", "").replace(" ", "")
+                    if s.endswith("+"):
+                        s = s[:-1]
+                    if "万" in s:
+                        s = s.replace("万", "")
+                        return int(float(s) * 10000)
+                    if s.isdigit():
+                        return int(s)
+                except Exception:
+                    return None
+                return None
+
+            read_count = None
+            like_count = None
+            share_count = None
+            recommend_count = None
+
+            def _parse_from_stats() -> None:
+                nonlocal read_count, like_count, share_count, recommend_count
+                try:
+                    if read_count is None and "read_num" in captured_stats:
+                        read_count = _parse_cn_count(captured_stats.get("read_num"))
+                except Exception:
+                    pass
+                try:
+                    if like_count is None and "like_num" in captured_stats:
+                        like_count = _parse_cn_count(captured_stats.get("like_num"))
+                    if like_count is None and "old_like_num" in captured_stats:
+                        like_count = _parse_cn_count(captured_stats.get("old_like_num"))
+                except Exception:
+                    pass
+                try:
+                    if share_count is None and "share_num" in captured_stats:
+                        share_count = _parse_cn_count(captured_stats.get("share_num"))
+                except Exception:
+                    pass
+                try:
+                    if recommend_count is None and "read_like_num" in captured_stats:
+                        recommend_count = _parse_cn_count(captured_stats.get("read_like_num"))
+                except Exception:
+                    pass
+
+                # Some templates expose stats on window after JS runs.
+                try:
+                    stat = page.evaluate("() => (window.appmsgstat || window.appmsg_stat || window.__appmsgstat || null)")
+                    if isinstance(stat, dict):
+                        if read_count is None:
+                            read_count = _parse_cn_count(stat.get("read_num") or stat.get("read_count"))
+                        if like_count is None:
+                            like_count = _parse_cn_count(stat.get("like_num") or stat.get("old_like_num"))
+                        if share_count is None:
+                            share_count = _parse_cn_count(stat.get("share_num") or stat.get("share_count"))
+                        if recommend_count is None:
+                            recommend_count = _parse_cn_count(stat.get("read_like_num") or stat.get("read_like_count"))
+                except Exception:
+                    pass
+
+            _parse_from_stats()
+
+            # If stats not captured by passive interception, try fetching appmsgext directly.
+            try:
+                if read_count is None or like_count is None or share_count is None or recommend_count is None:
+                    from urllib.parse import urlencode
+
+                    p = self._extract_appmsgext_params(url, page)
+                    if p.get("__biz") and p.get("mid") and p.get("idx") and p.get("sn"):
+                        q = {
+                            "__biz": p.get("__biz", ""),
+                            "mid": p.get("mid", ""),
+                            "idx": p.get("idx", ""),
+                            "sn": p.get("sn", ""),
+                            "is_only_read": "1",
+                            "is_temp_url": "0",
+                            "f": "json",
+                            "lang": "zh_CN",
+                        }
+                        fetch_url = "https://mp.weixin.qq.com/mp/getappmsgext?" + urlencode(q, doseq=False)
+                        js = f"() => fetch({json.dumps(fetch_url)}, {{credentials: 'include'}}).then(r => r.json()).catch(() => null)"
+                        resp = page.evaluate(js)
+                        if isinstance(resp, dict):
+                            stat = resp.get("appmsgstat") or resp.get("appmsg_stat") or {}
+                            if isinstance(stat, dict):
+                                captured_stats.update(stat)
+                            for k in ("read_num", "like_num", "old_like_num", "share_num", "read_like_num"):
+                                if k in resp and k not in captured_stats:
+                                    captured_stats[k] = resp.get(k)
+                            _parse_from_stats()
+            except Exception:
+                pass
+            if read_count is None:
+                for sel in ["#readNum3", "#readNum", "#js_read_area", ".read_num", "[id*='readNum']"]:
+                    try:
+                        el = page.locator(sel)
+                        if el.count() <= 0:
+                            continue
+                        txt = (el.first.text_content() or "").strip()
+                        v = _parse_cn_count(txt)
+                        if v is not None:
+                            read_count = v
+                            break
+                    except Exception:
+                        continue
+            if read_count is None:
+                try:
+                    t = (page.locator("body").text_content() or "").strip()
+                    m = re.search(r"阅读\\s*([0-9\\.]+\\s*万\\+?|[0-9,]+\\+?)", t)
+                    if m:
+                        read_count = _parse_cn_count(m.group(1))
+                except Exception:
+                    pass
+
+            info["read_count"] = read_count
+            info["like_count"] = like_count
+            info["share_count"] = share_count
+            info["recommend_count"] = recommend_count
 
         except Exception as e:
             print_error(f"文章内容获取失败: {str(e)}")

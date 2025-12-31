@@ -5,7 +5,7 @@ from core.auth import get_current_user
 from core.db import DB
 from core.models.base import DATA_STATUS
 from core.models.article import Article,ArticleBase
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, func, or_, desc
 from .base import success_response, error_response
 from core.config import cfg
 from apis.base import format_search_kw
@@ -13,6 +13,7 @@ from core.print import print_warning, print_info, print_error, print_success
 from core.insights import InsightsService
 from driver.wxarticle import WXArticleFetcher
 from core.queue import TaskQueue
+from core.models.user_article_state import UserArticleState
 router = APIRouter(prefix=f"/articles", tags=["文章管理"])
 
 def _estimate_word_count(text: str) -> int:
@@ -61,8 +62,8 @@ async def toggle_article_read_status(
 ):
     session = DB.get_session()
     try:
-        from core.models.article import Article
-        
+        user_id = str(current_user.get("original_user").id) if current_user.get("original_user") else str(current_user.get("username") or "")
+
         # 检查文章是否存在
         article = session.query(Article).filter(Article.id == article_id).first()
         if not article:
@@ -74,8 +75,26 @@ async def toggle_article_read_status(
                 )
             )
         
-        # 更新阅读状态
-        article.is_read = 1 if is_read else 0
+        now = datetime.now()
+        st = (
+            session.query(UserArticleState)
+            .filter(UserArticleState.user_id == user_id)
+            .filter(UserArticleState.article_id == article_id)
+            .first()
+        )
+        if st:
+            st.is_read = 1 if is_read else 0
+            st.updated_at = now
+        else:
+            session.add(
+                UserArticleState(
+                    user_id=user_id,
+                    article_id=article_id,
+                    is_read=1 if is_read else 0,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         session.commit()
         
         return success_response({
@@ -110,6 +129,58 @@ async def fetch_article_content(
             )
 
         if not force and (article.content or "").strip() and (article.content or "").strip() != "DELETED":
+            # Even when正文已存在，也可以补齐一次阅读数（best-effort）
+            try:
+                if (
+                    getattr(article, "read_count", None) is None
+                    or getattr(article, "like_count", None) is None
+                    or getattr(article, "share_count", None) is None
+                    or getattr(article, "recommend_count", None) is None
+                ):
+                    url = (article.url or "").strip()
+                    if url:
+                        info = await WXArticleFetcher().async_get_article_content(url)
+                        if isinstance(info, dict):
+                            changed_metrics = False
+                            try:
+                                rc = info.get("read_count", None)
+                                if rc is not None:
+                                    article.read_count = int(rc)
+                                    changed_metrics = True
+                            except Exception:
+                                pass
+                            try:
+                                lc = info.get("like_count", None)
+                                if lc is not None:
+                                    article.like_count = int(lc)
+                                    changed_metrics = True
+                            except Exception:
+                                pass
+                            try:
+                                sc = info.get("share_count", None)
+                                if sc is not None:
+                                    article.share_count = int(sc)
+                                    changed_metrics = True
+                            except Exception:
+                                pass
+                            try:
+                                rc2 = info.get("recommend_count", None)
+                                if rc2 is not None:
+                                    article.recommend_count = int(rc2)
+                                    changed_metrics = True
+                            except Exception:
+                                pass
+                            if changed_metrics:
+                                try:
+                                    article.updated_at = datetime.now()
+                                    session.add(article)
+                                    session.commit()
+                                    session.refresh(article)
+                                except Exception:
+                                    session.rollback()
+            except Exception:
+                session.rollback()
+
             ins = InsightsService().get_or_create_basic(article_id)
             return success_response(
                 {
@@ -117,6 +188,10 @@ async def fetch_article_content(
                     "fetched": False,
                     "content_len": len((article.content or "") or ""),
                     "desc_len": len((article.description or "") or ""),
+                    "read_count": getattr(article, "read_count", None),
+                    "like_count": getattr(article, "like_count", None),
+                    "share_count": getattr(article, "share_count", None),
+                    "recommend_count": getattr(article, "recommend_count", None),
                     "summary_len": len((ins.summary or "") if ins else ""),
                 }
             )
@@ -138,6 +213,10 @@ async def fetch_article_content(
         content = (info.get("content") or "").strip()
         topic_image = (info.get("topic_image") or "").strip()
         desc = (info.get("description") or "").strip()
+        read_count = info.get("read_count", None)
+        like_count = info.get("like_count", None)
+        share_count = info.get("share_count", None)
+        recommend_count = info.get("recommend_count", None)
 
         changed = False
         if content and (force or not (article.content or "").strip() or (article.content or "").strip() == "DELETED"):
@@ -149,6 +228,26 @@ async def fetch_article_content(
         if desc and not (article.description or "").strip():
             article.description = desc
             changed = True
+        if read_count is not None and (getattr(article, "read_count", None) is None or force):
+            try:
+                article.read_count = int(read_count)
+            except Exception:
+                pass
+        if like_count is not None and (getattr(article, "like_count", None) is None or force):
+            try:
+                article.like_count = int(like_count)
+            except Exception:
+                pass
+        if share_count is not None and (getattr(article, "share_count", None) is None or force):
+            try:
+                article.share_count = int(share_count)
+            except Exception:
+                pass
+        if recommend_count is not None and (getattr(article, "recommend_count", None) is None or force):
+            try:
+                article.recommend_count = int(recommend_count)
+            except Exception:
+                pass
 
         if changed:
             article.updated_at = datetime.now()
@@ -181,6 +280,10 @@ async def fetch_article_content(
                 "content_len": len((article.content or "") or ""),
                 "desc_len": len((article.description or "") or ""),
                 "pic_url": article.pic_url or "",
+                "read_count": getattr(article, "read_count", None),
+                "like_count": getattr(article, "like_count", None),
+                "share_count": getattr(article, "share_count", None),
+                "recommend_count": getattr(article, "recommend_count", None),
                 "summary_len": len((ins.summary or "") if ins else ""),
             }
         )
@@ -229,27 +332,33 @@ async def get_articles(
 ):
     session = DB.get_session()
     try:
-      
-        
-        # 构建查询条件
-        query = session.query(ArticleBase)
+        user_id = str(current_user.get("original_user").id) if current_user.get("original_user") else str(current_user.get("username") or "")
+
+        article_model = Article if has_content else ArticleBase
+        query = (
+            session.query(article_model, func.coalesce(UserArticleState.is_read, 0).label("user_is_read"))
+            .outerjoin(
+                UserArticleState,
+                and_(UserArticleState.article_id == article_model.id, UserArticleState.user_id == user_id),
+            )
+        )
         if has_content:
-            query = session.query(Article).filter(Article.content.isnot(None)).filter(Article.content != "").filter(Article.content != "DELETED")
+            query = query.filter(article_model.content.isnot(None)).filter(article_model.content != "").filter(article_model.content != "DELETED")
         if status:
-            query = query.filter(Article.status == status)
+            query = query.filter(article_model.status == status)
         else:
-            query = query.filter(Article.status != DATA_STATUS.DELETED)
+            query = query.filter(article_model.status != DATA_STATUS.DELETED)
         if mp_id:
-            query = query.filter(Article.mp_id == mp_id)
+            query = query.filter(article_model.mp_id == mp_id)
         elif mp_ids:
             try:
                 ids = [x.strip() for x in str(mp_ids).split(",") if x.strip()]
             except Exception:
                 ids = []
             if ids:
-                query = query.filter(Article.mp_id.in_(ids))
+                query = query.filter(article_model.mp_id.in_(ids))
         if unread_only:
-            query = query.filter(Article.is_read == 0)
+            query = query.filter(func.coalesce(UserArticleState.is_read, 0) == 0)
         if search:
             query = query.filter(
                format_search_kw(search)
@@ -257,10 +366,10 @@ async def get_articles(
         
         # 获取总数
         total = query.count()
-        query= query.order_by(Article.publish_time.desc()).offset(offset).limit(limit)
+        query = query.order_by(article_model.publish_time.desc()).offset(offset).limit(limit)
         # query= query.order_by(Article.id.desc()).offset(offset).limit(limit)
         # 分页查询（按发布时间降序）
-        articles = query.all()
+        rows = query.all()
         
         # 打印生成的 SQL 语句（包含分页参数）
         print_warning(query.statement.compile(compile_kwargs={"literal_binds": True}))
@@ -268,16 +377,19 @@ async def get_articles(
         # 查询公众号名称
         from core.models.feed import Feed
         mp_names = {}
+        articles = [a for (a, _is_read) in rows]
         for article in articles:
-            if article.mp_id and article.mp_id not in mp_names:
+            if getattr(article, "mp_id", None) and article.mp_id not in mp_names:
                 feed = session.query(Feed).filter(Feed.id == article.mp_id).first()
                 mp_names[article.mp_id] = feed.mp_name if feed else "未知公众号"
         
         # 合并公众号名称到文章列表
         article_list = []
-        for article in articles:
-            article_dict = article.__dict__
+        for (article, user_is_read) in rows:
+            article_dict = article.__dict__.copy()
+            article_dict.pop("_sa_instance_state", None)
             article_dict["mp_name"] = mp_names.get(article.mp_id, "未知公众号")
+            article_dict["is_read"] = int(user_is_read or 0)
             article_dict["word_count"] = _estimate_word_count(article_dict.get("description") or "")
             article_list.append(article_dict)
         

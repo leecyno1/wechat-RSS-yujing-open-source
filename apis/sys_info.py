@@ -2,6 +2,7 @@ import platform
 import time
 import sys
 import psutil
+import os
 from fastapi import APIRouter,Depends
 from typing import Dict, Any
 from core.auth import get_current_user
@@ -10,6 +11,9 @@ from driver.token import wx_cfg
 from core.config import cfg
 from jobs.mps import TaskQueue
 from driver.success import getLoginInfo,getStatus
+from fastapi.responses import Response
+from io import BytesIO
+import qrcode
 router = APIRouter(prefix="/sys", tags=["系统信息"])
 def get_docker_version():
         try:
@@ -41,6 +45,48 @@ async def get_base_info() -> Dict[str, Any]:
             message=f"获取信息失败: {str(e)}"
         )    
     
+
+_PROMO_QR_CACHE: dict[str, Any] = {"url": None, "png": None}
+
+
+@router.get("/promo/qr", summary="推广二维码(关注公众号)")
+async def promo_qr() -> Response:
+    """Return PNG QR code for promo.qr_url (or PROMO_QR_URL env via config)."""
+    qr_file = str(cfg.get("promo.qr_file", "static/promo/lemon_doctor_qr.jpg") or "static/promo/lemon_doctor_qr.jpg").strip()
+    if qr_file and os.path.exists(qr_file):
+        try:
+            with open(qr_file, "rb") as f:
+                data = f.read()
+            if not data:
+                return Response(status_code=404, content=b"", media_type="image/png")
+            ext = os.path.splitext(qr_file)[-1].lower()
+            media_type = "image/png"
+            if ext in (".jpg", ".jpeg"):
+                media_type = "image/jpeg"
+            elif ext == ".webp":
+                media_type = "image/webp"
+            return Response(content=data, media_type=media_type)
+        except Exception:
+            pass
+
+    url = str(cfg.get("promo.qr_url", "") or "").strip()
+    if not url:
+        # Keep it as an image endpoint: return 404 to avoid breaking <img> silently.
+        return Response(status_code=404, content=b"", media_type="image/png")
+
+    cached_url = _PROMO_QR_CACHE.get("url")
+    cached_png = _PROMO_QR_CACHE.get("png")
+    if cached_url == url and isinstance(cached_png, (bytes, bytearray)) and cached_png:
+        return Response(content=bytes(cached_png), media_type="image/png")
+
+    img = qrcode.make(url)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    png = buf.getvalue()
+    _PROMO_QR_CACHE["url"] = url
+    _PROMO_QR_CACHE["png"] = png
+    return Response(content=png, media_type="image/png")
+
 
 from core.resource import get_system_resources
 @router.get("/resources", summary="获取系统资源使用情况")

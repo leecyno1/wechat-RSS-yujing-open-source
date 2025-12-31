@@ -2,21 +2,43 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 
-// 导入 ArcoDesign
 import ArcoVue from '@arco-design/web-vue'
-// 导入 ArcoDesign 图标
-import { createApp } from 'vue';
-import ArcoVueIcon from '@arco-design/web-vue/es/icon'; // 关键步骤
-// 导入 ArcoDesign 样式
-import '@arco-design/web-vue/dist/arco.css'
-// 导入自定义样式
-import './style.css'
-const app = createApp(App)
-// 注册 ArcoDesign
-app.use(ArcoVue)
-// 注册图标组件
-app.use(ArcoVueIcon)
-// 注册路由
-app.use(router)
+import ArcoVueIcon from '@arco-design/web-vue/es/icon'
 
+import '@arco-design/web-vue/dist/arco.css'
+import './style.css'
+
+const applySystemTheme = () => {
+  if (typeof window === 'undefined') return
+
+  const set = (isDark: boolean) => {
+    if (!document.body) return
+    if (isDark) {
+      document.body.setAttribute('arco-theme', 'dark')
+    } else {
+      document.body.removeAttribute('arco-theme')
+    }
+  }
+
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+  if (!media) return
+
+  if (document.body) {
+    set(media.matches)
+  } else {
+    window.addEventListener('DOMContentLoaded', () => set(media.matches), { once: true })
+  }
+  if (typeof media.addEventListener === 'function') {
+    media.addEventListener('change', (e) => set((e as MediaQueryListEvent).matches))
+  } else if (typeof (media as any).addListener === 'function') {
+    ;(media as any).addListener((e: MediaQueryListEvent) => set(e.matches))
+  }
+}
+
+applySystemTheme()
+
+const app = createApp(App)
+app.use(ArcoVue)
+app.use(ArcoVueIcon)
+app.use(router)
 app.mount('#app')

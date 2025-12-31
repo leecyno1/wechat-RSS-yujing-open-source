@@ -19,6 +19,8 @@ from typing import Any, Optional
 import json
 import threading
 import time
+from sqlalchemy import func
+from core.models.user_subscription import UserSubscription
 router = APIRouter(prefix=f"/mps", tags=["公众号管理"])
 # import core.db as db
 # UPDB=db.Db("数据抓取")
@@ -70,6 +72,67 @@ def _extract_numeric_id(mp_id: Optional[str]) -> Optional[str]:
         return decoded if decoded.isdigit() else None
     except Exception:
         return None
+
+
+def _should_skip_sync(mp, sync_interval: int) -> tuple[bool, int]:
+    """Rate-limit by last sync_time (seconds since epoch)."""
+    try:
+        import time
+
+        now = int(time.time())
+        last_sync = int(getattr(mp, "sync_time", 0) or 0)
+        if last_sync and now - last_sync < sync_interval:
+            return True, now - last_sync
+        return False, now - last_sync if last_sync else now
+    except Exception:
+        return False, 0
+
+
+def _queue_update_feed(feed_id: str, start_page: int = 0, end_page: int = 1) -> None:
+    """Background worker: update one feed and (re)generate insights for changed articles.
+
+    Notes:
+    - Article-level insights are already enqueued in DB.add_article when a row changes.
+    - This function is designed to run inside TaskQueue worker threads.
+    """
+    session2 = DB.get_session()
+    try:
+        from core.models.feed import Feed
+        from core.wx import WxGather
+        from core.insights import InsightsService
+
+        mp = session2.query(Feed).filter(Feed.id == feed_id).first()
+        if not mp:
+            return
+
+        biz = _normalize_fakeid(getattr(mp, "faker_id", None))
+        if not biz:
+            return
+
+        sync_interval = int(cfg.get("sync_interval", 60) or 60)
+        should_skip, time_span = _should_skip_sync(mp, sync_interval)
+        if should_skip:
+            return
+
+        wx = WxGather().Model()
+        wx.get_Articles(
+            biz,
+            Mps_id=mp.id,
+            Mps_title=mp.mp_name,
+            CallBack=UpdateArticle,
+            start_page=max(0, int(start_page or 0)),
+            MaxPage=max(1, int(end_page or 1)),
+        )
+
+        try:
+            if bool(cfg.get("insights.prewarm_on_update", True)):
+                days = int(cfg.get("insights.prewarm_days", 3))
+                limit = int(cfg.get("insights.prewarm_limit", 120))
+                InsightsService().ensure_mp_recent_cached(mp.id, days=days, limit=limit)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def _load_plaza_data() -> dict:
@@ -184,6 +247,43 @@ def _plaza_upsert_item(item: dict) -> None:
         _with_plaza_file_lock(_apply)
 
 
+def _uid(current_user: dict) -> str:
+    try:
+        return str(current_user.get("original_user").id)
+    except Exception:
+        return str(current_user.get("username") or "")
+
+
+def _permissions_list(current_user: dict) -> list[str]:
+    raw = current_user.get("permissions", [])
+    if isinstance(raw, list):
+        return [str(x) for x in raw]
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return []
+        try:
+            v = json.loads(s)
+            if isinstance(v, list):
+                return [str(x) for x in v]
+        except Exception:
+            pass
+        return [x.strip() for x in s.split(",") if x.strip()]
+    return []
+
+
+def _can_manage_feeds(current_user: dict) -> bool:
+    try:
+        if str(current_user.get("role") or "") == "admin":
+            return True
+        if str(current_user.get("username") or "") == "admin":
+            return True
+        perms = _permissions_list(current_user)
+        return "wechat:manage" in perms or "admin" in perms
+    except Exception:
+        return False
+
+
 @router.get("/plaza", summary="订阅广场：分类推荐公众号")
 async def get_plaza(
     kw: str = Query("", description="可选：关键词过滤"),
@@ -254,14 +354,28 @@ async def get_mps(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     kw: str = Query(""),
+    scope: str = Query("mine", description="mine|all; all仅管理员可用"),
     current_user: dict = Depends(get_current_user)
 ):
     session = DB.get_session()
     try:
         from core.models.feed import Feed
-        query = session.query(Feed)
-        # 默认仅返回可用于同步文章的订阅（需要 faker_id）
-        query = query.filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "")
+        user_id = _uid(current_user)
+        query = session.query(Feed).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "")
+
+        if scope != "all" or not _can_manage_feeds(current_user):
+            # per-user subscriptions
+            has_subs = bool(session.query(func.count(UserSubscription.id)).filter(UserSubscription.user_id == user_id).scalar() or 0)
+            if not has_subs and (str(current_user.get("role") or "") == "admin" or str(current_user.get("username") or "") == "admin"):
+                # legacy compatibility: admin without subscriptions -> subscribe all
+                try:
+                    now = datetime.now()
+                    all_ids = session.query(Feed.id).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "").all()
+                    session.bulk_save_objects([UserSubscription(user_id=user_id, feed_id=fid, created_at=now, updated_at=now) for (fid,) in all_ids])
+                    session.commit()
+                except Exception:
+                    session.rollback()
+            query = query.join(UserSubscription, UserSubscription.feed_id == Feed.id).filter(UserSubscription.user_id == user_id)
         if kw:
             query = query.filter(Feed.mp_name.ilike(f"%{kw}%"))
         total = query.count()
@@ -302,6 +416,42 @@ async def update_mps(
     session = DB.get_session()
     try:
         from core.models.feed import Feed
+        from core.queue import TaskQueue
+
+        if str(mp_id).strip().lower() == "all":
+            # One-click refresh: enqueue updates for all feeds the current user subscribed to.
+            user_id = _uid(current_user)
+            query = (
+                session.query(Feed)
+                .join(UserSubscription, UserSubscription.feed_id == Feed.id)
+                .filter(UserSubscription.user_id == user_id)
+                .filter(Feed.faker_id.isnot(None))
+                .filter(Feed.faker_id != "")
+            )
+            feeds = query.all()
+            if not feeds:
+                return success_response({"queued": 0, "message": "当前用户暂无订阅公众号"})
+
+            queued = 0
+            for f in feeds:
+                try:
+                    TaskQueue.add_task(_queue_update_feed, str(f.id), int(start_page or 0), int(end_page or 1))
+                    queued += 1
+                except Exception:
+                    continue
+            return success_response({"queued": queued, "total": len(feeds)})
+
+        # 非管理员仅允许更新自己订阅的公众号，避免公域滥用
+        if not _can_manage_feeds(current_user):
+            user_id = _uid(current_user)
+            ok = (
+                session.query(func.count(UserSubscription.id))
+                .filter(UserSubscription.user_id == user_id)
+                .filter(UserSubscription.feed_id == mp_id)
+                .scalar()
+            )
+            if not ok:
+                return error_response(code=40301, message="无权限更新该公众号（未订阅）")
         mp = session.query(Feed).filter(Feed.id == mp_id).first()
         if not mp:
            return error_response(
@@ -320,10 +470,8 @@ async def update_mps(
             session.commit()
         import time
         sync_interval=cfg.get("sync_interval",60)
-        if mp.update_time is None:
-            mp.update_time=int(time.time())-sync_interval
-        time_span=int(time.time())-int(mp.update_time)
-        if time_span<sync_interval:
+        should_skip, time_span = _should_skip_sync(mp, int(sync_interval or 60))
+        if should_skip:
            return error_response(
                     code=40402,
                     message="请不要频繁更新操作",
@@ -429,6 +577,7 @@ async def add_mp(
         from core.models.feed import Feed
         import time
         now = datetime.now()
+        user_id = _uid(current_user)
         
         biz = _normalize_fakeid(mp_id)
         numeric_id = _extract_numeric_id(mp_id)
@@ -475,6 +624,20 @@ async def add_mp(
         session.commit()
         
         feed = existing_feed if existing_feed else new_feed
+
+        # Ensure current user is subscribed to this feed (方案1)
+        try:
+            sub = (
+                session.query(UserSubscription)
+                .filter(UserSubscription.user_id == user_id)
+                .filter(UserSubscription.feed_id == feed.id)
+                .first()
+            )
+            if not sub:
+                session.add(UserSubscription(user_id=user_id, feed_id=feed.id, created_at=now, updated_at=now))
+                session.commit()
+        except Exception:
+            session.rollback()
         # Persist into plaza (community) so "订阅广场" can grow over time.
         try:
             _plaza_upsert_item(
@@ -586,30 +749,38 @@ async def sync_plaza_from_feeds(
     return success_response({"synced": ok, "limit": limit})
 
 
-@router.delete("/{mp_id}", summary="删除订阅号")
+@router.delete("/{mp_id}", summary="删除订阅号(管理员=删除公众号；普通用户=取消订阅)")
 async def delete_mp(
     mp_id: str,
+    hard: bool = Query(False, description="仅管理员：true=删除公众号本身；false=仅取消订阅"),
     current_user: dict = Depends(get_current_user)
 ):
     session = DB.get_session()
     try:
         from core.models.feed import Feed
-        mp = session.query(Feed).filter(Feed.id == mp_id).first()
-        if not mp:
-            raise HTTPException(
-                status_code=status.HTTP_201_CREATED,
-                detail=error_response(
-                    code=40401,
-                    message="订阅号不存在"
+        user_id = _uid(current_user)
+
+        if _can_manage_feeds(current_user) and hard:
+            mp = session.query(Feed).filter(Feed.id == mp_id).first()
+            if not mp:
+                raise HTTPException(
+                    status_code=status.HTTP_201_CREATED,
+                    detail=error_response(code=40401, message="订阅号不存在"),
                 )
-            )
-        
-        session.delete(mp)
+            session.query(UserSubscription).filter(UserSubscription.feed_id == mp_id).delete(synchronize_session=False)
+            session.delete(mp)
+            session.commit()
+            return success_response({"message": "订阅号删除成功", "id": mp_id})
+
+        # default: unsubscribe only
+        deleted = (
+            session.query(UserSubscription)
+            .filter(UserSubscription.user_id == user_id)
+            .filter(UserSubscription.feed_id == mp_id)
+            .delete(synchronize_session=False)
+        )
         session.commit()
-        return success_response({
-            "message": "订阅号删除成功",
-            "id": mp_id
-        })
+        return success_response({"message": "已取消订阅", "id": mp_id, "deleted": int(deleted or 0)})
     except Exception as e:
         session.rollback()
         print(f"删除订阅号错误: {str(e)}")

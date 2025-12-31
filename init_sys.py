@@ -9,14 +9,21 @@ from core.auth import pwd_context
 import time
 import os
 from core.print import print_info, print_error
+from datetime import datetime
 def init_user(_db: Db):
     try:
       username,password=os.getenv("USERNAME", "admin"),os.getenv("PASSWORD", "admin@123")
       session=_db.get_session()
+      now = datetime.now()
       session.add(User(
-          id=0,
+          id="0",
           username=username,
           password_hash=pwd_context.hash(password),
+          role="admin",
+          permissions='["admin","wechat:manage","tag:view","tag:edit","config:view","message_task:view","message_task:edit"]',
+          is_active=True,
+          created_at=now,
+          updated_at=now,
           ))
       session.commit()
       print_info(f"初始化用户成功,请使用以下凭据登录：{username}")

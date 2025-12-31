@@ -38,7 +38,7 @@ const fetchTaskDetail = async (id: string) => {
       message_type: res.message_type,
       message_template: res.message_template,
       web_hook_url: res.web_hook_url,
-      mps_id: JSON.parse(res.mps_id||[]),
+      mps_id: JSON.parse(res.mps_id || '[]'),
       status: res.status,
       cron_exp: res.cron_exp
     }

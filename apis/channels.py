@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as fast_status
-from sqlalchemy import func
+from sqlalchemy import and_, func
 
 from apis.base import error_response, success_response
 from core.auth import get_current_user
@@ -11,6 +11,8 @@ from core.models.article import Article
 from core.models.article import ArticleBase
 from core.models.base import DATA_STATUS
 from core.models.feed import Feed
+from core.models.user_article_state import UserArticleState
+from core.models.user_subscription import UserSubscription
 from driver.token import get as get_wx_cfg
 import base64
 import json
@@ -84,6 +86,20 @@ def _mp_url_key(url: str | None) -> str:
         return ""
 
 
+def _uid(current_user: dict) -> str:
+    try:
+        return str(current_user.get("original_user").id)
+    except Exception:
+        return str(current_user.get("username") or "")
+
+
+def _is_admin(current_user: dict) -> bool:
+    try:
+        return str(current_user.get("role") or "") == "admin" or str(current_user.get("username") or "") == "admin"
+    except Exception:
+        return False
+
+
 @router.get("/feeds", summary="获取频道(公众号)列表 + 未读统计")
 async def list_channel_feeds(
     limit: int = Query(200, ge=1, le=1000),
@@ -94,28 +110,61 @@ async def list_channel_feeds(
 ):
     session = DB.get_session()
 
-    feed_query = session.query(Feed).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "")
+    user_id = _uid(current_user)
+
+    # 用户订阅列表（多用户隔离）
+    subs_q = session.query(UserSubscription.feed_id).filter(UserSubscription.user_id == user_id)
+    has_subs = bool(session.query(func.count(UserSubscription.id)).filter(UserSubscription.user_id == user_id).scalar() or 0)
+
+    # 兼容旧单用户数据：管理员如果尚未建立订阅映射，则默认“订阅全部”
+    if not has_subs and _is_admin(current_user):
+        try:
+            feeds_all = session.query(Feed.id).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "").all()
+            now = datetime.now()
+            session.bulk_save_objects(
+                [UserSubscription(user_id=user_id, feed_id=fid, created_at=now, updated_at=now) for (fid,) in feeds_all]
+            )
+            session.commit()
+            has_subs = True
+        except Exception:
+            session.rollback()
+
+    feed_query = (
+        session.query(Feed)
+        .join(UserSubscription, UserSubscription.feed_id == Feed.id)
+        .filter(UserSubscription.user_id == user_id)
+        .filter(Feed.faker_id.isnot(None))
+        .filter(Feed.faker_id != "")
+    )
     if kw:
         feed_query = feed_query.filter(Feed.mp_name.ilike(f"%{kw}%"))
     total = feed_query.count()
 
     # counts
+    feed_ids_subq = subs_q.subquery()
     unread_rows = (
         session.query(ArticleBase.mp_id, func.count(ArticleBase.id))
+        .outerjoin(
+            UserArticleState,
+            and_(UserArticleState.article_id == ArticleBase.id, UserArticleState.user_id == user_id),
+        )
         .filter(ArticleBase.status != DATA_STATUS.DELETED)
-        .filter(ArticleBase.is_read == 0)
+        .filter(ArticleBase.mp_id.in_(feed_ids_subq))
+        .filter(func.coalesce(UserArticleState.is_read, 0) == 0)
         .group_by(ArticleBase.mp_id)
         .all()
     )
     total_rows = (
         session.query(ArticleBase.mp_id, func.count(ArticleBase.id))
         .filter(ArticleBase.status != DATA_STATUS.DELETED)
+        .filter(ArticleBase.mp_id.in_(feed_ids_subq))
         .group_by(ArticleBase.mp_id)
         .all()
     )
     latest_rows = (
         session.query(ArticleBase.mp_id, func.max(ArticleBase.publish_time))
         .filter(ArticleBase.status != DATA_STATUS.DELETED)
+        .filter(ArticleBase.mp_id.in_(feed_ids_subq))
         .group_by(ArticleBase.mp_id)
         .all()
     )
@@ -184,7 +233,9 @@ async def mark_all_read(
 ):
     session = DB.get_session()
     try:
-        query = session.query(ArticleBase).filter(ArticleBase.status != DATA_STATUS.DELETED).filter(ArticleBase.is_read == 0)
+        user_id = _uid(current_user)
+
+        query = session.query(ArticleBase.id).filter(ArticleBase.status != DATA_STATUS.DELETED)
         if mp_ids:
             try:
                 ids = [x.strip() for x in str(mp_ids).split(",") if x.strip()]
@@ -197,7 +248,31 @@ async def mark_all_read(
         if kw:
             query = query.filter(ArticleBase.title.like(f"%{kw}%"))
 
-        updated = query.update({"is_read": 1, "updated_at": datetime.now()}, synchronize_session=False)
+        article_ids = [aid for (aid,) in query.all()]
+        if not article_ids:
+            return success_response({"updated": 0})
+
+        existing_ids = set(
+            x
+            for (x,) in session.query(UserArticleState.article_id)
+            .filter(UserArticleState.user_id == user_id)
+            .filter(UserArticleState.article_id.in_(article_ids))
+            .all()
+        )
+
+        now = datetime.now()
+        missing = [aid for aid in article_ids if aid not in existing_ids]
+        if missing:
+            session.bulk_save_objects(
+                [UserArticleState(user_id=user_id, article_id=aid, is_read=1, created_at=now, updated_at=now) for aid in missing]
+            )
+
+        updated = (
+            session.query(UserArticleState)
+            .filter(UserArticleState.user_id == user_id)
+            .filter(UserArticleState.article_id.in_(article_ids))
+            .update({"is_read": 1, "updated_at": now}, synchronize_session=False)
+        )
         session.commit()
         return success_response({"updated": int(updated or 0)})
     except Exception as e:

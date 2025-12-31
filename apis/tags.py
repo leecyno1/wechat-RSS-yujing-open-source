@@ -7,11 +7,26 @@ from sqlalchemy.orm import Session
 from schemas.tags import Tags, TagsCreate
 from .base import success_response, error_response
 from core.auth import get_current_user, requires_permission
+from sqlalchemy import or_
 
 # 标签管理API路由
 # 提供标签的增删改查功能
 # 需要管理员权限执行写操作
 router = APIRouter(prefix="/tags", tags=["标签管理"])
+
+
+def _uid(current_user: dict) -> str:
+    try:
+        return str(current_user.get("original_user").id)
+    except Exception:
+        return str(current_user.get("username") or "")
+
+
+def _is_admin(current_user: dict) -> bool:
+    try:
+        return str(current_user.get("role") or "") == "admin" or str(current_user.get("username") or "") == "admin"
+    except Exception:
+        return False
 
 @router.get("", 
     summary="获取标签列表",
@@ -27,7 +42,11 @@ async def get_tags(offset: int = 0, limit: int = 100, db: Session = Depends(get_
     返回:
     - 包含标签列表和分页信息的成功响应
     """
-    query = db.query(TagsModel)
+    user_id = _uid(cur_user)
+    if _is_admin(cur_user):
+        query = db.query(TagsModel).filter(or_(TagsModel.user_id == user_id, TagsModel.user_id.is_(None)))
+    else:
+        query = db.query(TagsModel).filter(TagsModel.user_id == user_id)
     total = query.count()
     tags = query.offset(offset).limit(limit).all()
     return success_response(data={
@@ -65,8 +84,10 @@ async def create_tag(tag: TagsCreate, db: Session = Depends(get_db),cur_user: di
     """
     import uuid
     try:
+        user_id = _uid(cur_user)
         db_tag = TagsModel(
             id=str(uuid.uuid4()),
+            user_id=user_id,
             name=tag.name or '',
             cover=tag.cover or '',
             intro=tag.intro or '',
@@ -102,7 +123,13 @@ async def get_tag(tag_id: str, db: Session = Depends(get_db),cur_user: dict = De
     - 成功: 包含标签详情的响应
     - 失败: 201错误响应(标签不存在)
     """
-    tag = db.query(TagsModel).filter(TagsModel.id == tag_id).first()
+    user_id = _uid(cur_user)
+    q = db.query(TagsModel).filter(TagsModel.id == tag_id)
+    if _is_admin(cur_user):
+        q = q.filter(or_(TagsModel.user_id == user_id, TagsModel.user_id.is_(None)))
+    else:
+        q = q.filter(TagsModel.user_id == user_id)
+    tag = q.first()
     if not tag:
         return error_response(code=status.HTTP_201_CREATED, message="Tag not found")
     return success_response(data=tag)
@@ -132,7 +159,13 @@ async def update_tag(tag_id: str, tag_data: TagsCreate, db: Session = Depends(ge
     - 失败: 404错误响应(标签不存在)或500错误响应(服务器错误)
     """
     try:
-        tag = db.query(TagsModel).filter(TagsModel.id == tag_id).first()
+        user_id = _uid(cur_user)
+        q = db.query(TagsModel).filter(TagsModel.id == tag_id)
+        if _is_admin(cur_user):
+            q = q.filter(or_(TagsModel.user_id == user_id, TagsModel.user_id.is_(None)))
+        else:
+            q = q.filter(TagsModel.user_id == user_id)
+        tag = q.first()
         if not tag:
             return error_response(code=404, message="Tag not found")
         
@@ -141,6 +174,8 @@ async def update_tag(tag_id: str, tag_data: TagsCreate, db: Session = Depends(ge
         tag.intro = tag_data.intro
         tag.status = tag_data.status
         tag.mps_id = tag_data.mps_id
+        if tag.user_id is None:
+            tag.user_id = user_id
         tag.updated_at = datetime.now()
         
         db.commit()
@@ -165,7 +200,13 @@ async def delete_tag(tag_id: str, db: Session = Depends(get_db),cur_user: dict =
     - 失败: 404错误响应(标签不存在)或500错误响应(服务器错误)
     """
     try:
-        tag = db.query(TagsModel).filter(TagsModel.id == tag_id).first()
+        user_id = _uid(cur_user)
+        q = db.query(TagsModel).filter(TagsModel.id == tag_id)
+        if _is_admin(cur_user):
+            q = q.filter(or_(TagsModel.user_id == user_id, TagsModel.user_id.is_(None)))
+        else:
+            q = q.filter(TagsModel.user_id == user_id)
+        tag = q.first()
         if not tag:
             return error_response(code=status.HTTP_201_CREATED, message="Tag not found")
         db.delete(tag)

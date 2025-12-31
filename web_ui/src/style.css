@@ -12,6 +12,9 @@ html, body {
     Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: light dark;
+  background: var(--color-bg-1);
+  color: var(--color-text-1);
 }
 
 #app {
@@ -21,7 +24,7 @@ html, body {
 
 /* 链接样式 */
 a {
-  color: #165DFF;
+  color: var(--color-primary-6, #165dff);
   text-decoration: none;
 }
 
@@ -31,10 +34,14 @@ a:hover {
 
 /* 自定义ArcoDesign主题变量 */
 :root {
-  --primary-color: #165DFF;
-  --success-color: #00B42A;
-  --warning-color: #FF7D00;
-  --danger-color: #F53F3F;
+  --primary-color: var(--color-primary-6, #165dff);
+  --success-color: var(--color-success-6, #00b42a);
+  --warning-color: var(--color-warning-6, #ff7d00);
+  --danger-color: var(--color-danger-6, #f53f3f);
+  --app-header-height: 56px;
+  --app-radius-sm: 12px;
+  --app-radius-md: 14px;
+  --app-radius-lg: 18px;
 }
 
 /* ========== 设计系统变量 ========== */
@@ -57,11 +64,11 @@ a:hover {
   /* 颜色层次 */
   --color-primary-light: #e8f1ff;
   --color-primary-lighter: #f5f8ff;
-  --color-text-primary: #1d2129;
-  --color-text-secondary: #4e5969;
-  --color-text-tertiary: #86909c;
-  --color-bg-light: #f7f8fa;
-  --color-border-light: #f2f3f5;
+  --color-text-primary: var(--color-text-1);
+  --color-text-secondary: var(--color-text-2);
+  --color-text-tertiary: var(--color-text-3);
+  --color-bg-light: var(--color-bg-1);
+  --color-border-light: var(--color-border);
 }
 
 /* ========== 新增美化样式 ========== */
@@ -136,12 +143,12 @@ a:hover {
 
 /* 增强卡片样式 */
 .enhanced-card {
-  background: white;
+  background: var(--color-bg-2);
   border-radius: 12px;
   padding: var(--space-lg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-border);
 }
 .enhanced-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -162,7 +169,7 @@ a:hover {
   color: white;
 }
 .enhanced-button--primary:hover {
-  background: #0e4acc;
+  background: var(--color-primary-5, #0e4acc);
   box-shadow: 0 2px 8px rgba(22, 93, 255, 0.3);
 }
 
@@ -198,6 +205,21 @@ a:hover {
 .table-row:hover {
   background-color: rgba(22, 93, 255, 0.05);
   transition: background-color 0.2s ease;
+}
+
+/* ========== 全局 Apple-like 微调 ========== */
+.arco-card {
+  border-radius: var(--app-radius-md);
+}
+
+.arco-btn {
+  border-radius: var(--app-radius-sm);
+}
+
+.arco-input-wrapper,
+.arco-select-view,
+.arco-textarea-wrapper {
+  border-radius: var(--app-radius-sm);
 }
 
 /* 淡入动画 */

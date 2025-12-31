@@ -31,7 +31,7 @@ const fetchTag = async (id: string) => {
     const res = await getTag(id)
     formModel.value = {
       ...res,
-      mps_id: JSON.parse(res.mps_id||[]),
+      mps_id: JSON.parse(res.mps_id || '[]'),
     }
      // 初始化选择器数据
     nextTick(() => {

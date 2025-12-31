@@ -56,13 +56,6 @@
     </div>
     <div class="login-footer">
       <div class="copyright">Design By Rachel</div>
-      <div class="footer-links">
-        <a-link href="https://github.com/rachelos/we-mp-rss" target="_blank">GitHub</a-link>
-        <span class="divider">|</span>
-        <a-link href="https://gitee.com/rachel_os/we-mp-rss" target="_blank">Gitee</a-link>
-        <span class="divider">|</span>
-        <a-link href="/api/docs" target="_blank">Docs</a-link>
-      </div>
     </div>
   </div>
 </template>
@@ -545,5 +538,81 @@ const handleSubmit = async () => {
     width: 100% !important;
     padding:0 !important;
   }
+}
+
+/* --- Theme + Apple-like overrides (follow system light/dark) --- */
+.login-container {
+  background:
+    radial-gradient(1200px circle at 20% 20%, color-mix(in srgb, var(--color-primary-6) 14%, transparent), transparent 60%),
+    radial-gradient(900px circle at 80% 0%, color-mix(in srgb, var(--color-success-6) 10%, transparent), transparent 55%),
+    var(--color-bg-1) !important;
+  animation: none !important;
+}
+
+.login-left {
+  color: var(--color-text-1) !important;
+}
+
+.intro-title,
+.intro-text,
+.feature-item {
+  text-shadow: none !important;
+}
+
+.intro-text {
+  opacity: 1 !important;
+}
+
+.login-right {
+  background: color-mix(in srgb, var(--color-bg-2) 70%, transparent) !important;
+  border-left: 1px solid var(--color-border) !important;
+  backdrop-filter: none !important;
+}
+
+.login-card {
+  background: color-mix(in srgb, var(--color-bg-2) 92%, transparent) !important;
+  border: 1px solid var(--color-border) !important;
+}
+
+.login-card:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12) !important;
+}
+
+.login-footer {
+  position: static !important;
+  color: var(--color-text-3) !important;
+}
+
+:deep(.arco-form-item-label) {
+  color: var(--color-text-2) !important;
+}
+
+:deep(.arco-input-wrapper) {
+  background: var(--color-bg-2) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-1) !important;
+}
+
+:deep(.arco-input-wrapper:hover) {
+  border-color: var(--color-neutral-4) !important;
+}
+
+:deep(.arco-input-wrapper:focus-within) {
+  border-color: var(--color-primary-6) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary-6) 18%, transparent) !important;
+}
+
+:deep(.arco-input::placeholder) {
+  color: var(--color-text-4) !important;
+}
+
+:deep(.arco-btn-primary) {
+  background: var(--color-primary-6) !important;
+  border: none !important;
+}
+
+:deep(.arco-btn-primary:hover) {
+  background: var(--color-primary-5) !important;
 }
 </style>

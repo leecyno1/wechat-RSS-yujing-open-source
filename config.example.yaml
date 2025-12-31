@@ -73,6 +73,19 @@ rss:
 #登录会话有效时长 单位分钟 默认4320分钟 3天
 token_expire_minutes: ${TOKEN_EXPIRE_MINUTES:-4320}
 
+# 认证/公域注册
+auth:
+  # 是否允许公开注册（公域部署建议开启后配合反爬/验证码/限流）
+  allow_register: ${ALLOW_REGISTER:-False}
+
+# 公告/推广（登录后弹窗）
+promo:
+  # 二维码编码的目标URL（建议填公众号/文章的 https 链接；前端展示为二维码）
+  qr_url: ${PROMO_QR_URL:-}
+  # 也可直接放置二维码图片文件（优先使用），支持 png/jpg/webp
+  # 默认使用内置图片；也可覆盖为 data 目录（已挂载持久化卷）如：data/promo_qr.png
+  qr_file: ${PROMO_QR_FILE:-static/promo/lemon_doctor_qr.jpg}
+
 cache:
   #缓存目录，默认为./data/cache
   dir: ${CACHE.DIR:-./data/cache}

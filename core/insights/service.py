@@ -62,6 +62,31 @@ class InsightsService:
                         if topic_image and not (article.pic_url or "").strip():
                             article.pic_url = topic_image
                             changed = True
+                        # Best-effort: persist read_count when available (may be NULL)
+                        if info.get("read_count", None) is not None:
+                            try:
+                                article.read_count = int(info.get("read_count"))
+                                changed = True
+                            except Exception:
+                                pass
+                        if info.get("like_count", None) is not None:
+                            try:
+                                article.like_count = int(info.get("like_count"))
+                                changed = True
+                            except Exception:
+                                pass
+                        if info.get("share_count", None) is not None:
+                            try:
+                                article.share_count = int(info.get("share_count"))
+                                changed = True
+                            except Exception:
+                                pass
+                        if info.get("recommend_count", None) is not None:
+                            try:
+                                article.recommend_count = int(info.get("recommend_count"))
+                                changed = True
+                            except Exception:
+                                pass
                         if changed:
                             article.updated_at = datetime.now()
                             session.add(article)

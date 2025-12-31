@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { Message } from '@arco-design/web-vue'
 import { getSubscriptions, addSubscription, updateSubscription, deleteSubscription } from '@/api/subscription'
 import { getToken } from '@/utils/auth'
 
@@ -99,16 +100,12 @@ const loadData = async () => {
       page: pagination.current - 1, // 转换为0-based
       pageSize: pagination.pageSize
     })
-    
-    if (res.code === 0) {
-      mpList.value = res.data.list || []
-      pagination.total = res.data.total || 0
-    } else {
-      throw new Error(res.message || '获取公众号列表失败')
-    }
+
+    mpList.value = (res as any)?.list || (res as any)?.data?.list || []
+    pagination.total = (res as any)?.total || (res as any)?.data?.total || 0
   } catch (error) {
     console.error('获取公众号列表错误:', error)
-    Message.error(error.message)
+    Message.error((error as any)?.message || String(error || '获取公众号列表失败'))
   }
 }
 
@@ -141,7 +138,7 @@ const handleOk = async () => {
 }
 
 const deleteMp = async (id) => {
-  await deleteSubscription(id)
+  await deleteSubscription(id, { hard: true })
   loadData()
 }
 
