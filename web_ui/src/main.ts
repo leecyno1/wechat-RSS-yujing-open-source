@@ -7,35 +7,9 @@ import ArcoVueIcon from '@arco-design/web-vue/es/icon'
 
 import '@arco-design/web-vue/dist/arco.css'
 import './style.css'
+import { initTheme } from '@/utils/theme'
 
-const applySystemTheme = () => {
-  if (typeof window === 'undefined') return
-
-  const set = (isDark: boolean) => {
-    if (!document.body) return
-    if (isDark) {
-      document.body.setAttribute('arco-theme', 'dark')
-    } else {
-      document.body.removeAttribute('arco-theme')
-    }
-  }
-
-  const media = window.matchMedia?.('(prefers-color-scheme: dark)')
-  if (!media) return
-
-  if (document.body) {
-    set(media.matches)
-  } else {
-    window.addEventListener('DOMContentLoaded', () => set(media.matches), { once: true })
-  }
-  if (typeof media.addEventListener === 'function') {
-    media.addEventListener('change', (e) => set((e as MediaQueryListEvent).matches))
-  } else if (typeof (media as any).addListener === 'function') {
-    ;(media as any).addListener((e: MediaQueryListEvent) => set(e.matches))
-  }
-}
-
-applySystemTheme()
+initTheme()
 
 const app = createApp(App)
 app.use(ArcoVue)

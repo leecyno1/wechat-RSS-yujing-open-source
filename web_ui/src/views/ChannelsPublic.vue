@@ -1,7 +1,7 @@
 <template>
   <div class="channels-page">
     <a-layout class="channels-layout">
-      <a-layout-sider class="sider" :width="220">
+      <a-layout-sider class="sider" :width="180">
         <div class="sider-top">
           <div class="sider-title">
             <span>订阅</span>
@@ -48,7 +48,7 @@
               <a-list :bordered="false" class="channel-list">
               <a-list-item class="channel-item" :class="{ active: activeChannelId === 'all' }" @click="selectChannel('all')">
                 <div class="channel-item-row" title="查看所有文章">
-                  <a-avatar :size="32" :image-url="AvatarAll">
+                  <a-avatar :size="40" :image-url="AvatarAll">
                     <img :src="AvatarAll" />
                   </a-avatar>
                   <div class="channel-name">全部订阅</div>
@@ -64,7 +64,7 @@
                 @click="selectChannel(c.id)"
               >
                 <div class="channel-item-row" :title="c.intro || c.name">
-                  <a-avatar :size="32" :image-url="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'">
+                  <a-avatar :size="40" :image-url="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'">
                     <img :src="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'" />
                   </a-avatar>
                   <div class="channel-name">{{ c.name }}</div>
@@ -82,7 +82,7 @@
             <a-list :bordered="false" class="channel-list">
               <a-list-item v-for="t in topics" :key="t.id" class="channel-item" @click.stop="selectTopic(t)">
                 <div class="channel-item-row" :title="t.intro || t.name">
-                  <a-avatar :size="24">
+                  <a-avatar :size="32">
                     <img :src="t.cover ? (baseUrl + t.cover) : '/static/logo.svg'" />
                   </a-avatar>
                   <div class="channel-name">{{ t.name }}</div>
@@ -594,8 +594,8 @@ const selectChannel = async (id: string, silent?: boolean) => {
   }
   if (!silent) {
     const query: any = id.startsWith('topic:')
-      ? { topic_id: id.replace(/^topic:/, ''), channel_id: undefined }
-      : { channel_id: id, topic_id: undefined }
+      ? { topic_id: id.replace(/^topic:/, '') }
+      : { channel_id: id }
     router.replace({ path: '/channels', query }).catch(() => {})
   }
   // Auto refresh newest articles on page refresh / channel switch.
@@ -724,9 +724,9 @@ const markAllReadForCurrent = async () => {
 }
 
 const goPlaza = () => router.push('/add-subscription')
-const goCreateChannel = () => router.push('/tags/add')
+const goCreateChannel = () => router.push('/manage/topics/add')
 const goExport = () => router.push('/export/records')
-	const goTopics = () => router.push('/tags')
+	const goTopics = () => router.push('/manage/topics')
 
 const selectTopic = async (t: any, silent?: boolean) => {
   activeTopic.value = t
@@ -805,22 +805,22 @@ onUnmounted(() => {
   min-height: 0;
 }
 .sider-top {
-  padding: 10px 10px 8px;
+  padding: 8px 8px 6px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 .sider-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   letter-spacing: -0.2px;
 }
 .sider-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 .tab-btn {
   display: flex;
@@ -833,7 +833,7 @@ onUnmounted(() => {
 .sider-list {
   flex: 1;
   overflow: auto;
-  padding: 10px;
+  padding: 8px;
   min-height: 0;
 }
 .sider-section {
@@ -871,9 +871,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
-  border-radius: 14px;
-  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  min-height: 42px;
   flex-wrap: nowrap;
   background: color-mix(in srgb, var(--color-bg-2) 85%, transparent);
   border: 1px solid var(--color-neutral-3);

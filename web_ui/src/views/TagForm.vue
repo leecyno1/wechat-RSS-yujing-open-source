@@ -104,7 +104,7 @@ const handleSubmit = async () => {
       await createTag(submitData)
       Message.success('创建成功')
     }
-    router.push('/tags')
+    router.push('/manage/topics')
   } catch (error) {
     Message.error(isEdit.value ? '更新失败' : '创建失败')
   } finally {

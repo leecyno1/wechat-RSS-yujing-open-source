@@ -1,206 +1,114 @@
 <template>
   <a-layout class="app-container">
-    <!-- 头部 -->
-    <a-layout-header class="app-header" v-if="route.path !== '/login'">
-      <div class="header-left">
-        <div class="logo">
-          <img :src="logo" alt="avatar" :width="60" style="margin-right:1rem;">
-          <router-link to="/">{{ appTitle }}</router-link>
-          <a-tooltip v-if="hasLogined" :content="!haswxLogined ? '未授权，请扫码登录' : '点我扫码授权'" position="bottom">
-            <icon-scan @click="showAuthQrcode()" :style="{ marginLeft: '10px', cursor: 'pointer', color: !haswxLogined ? 'var(--color-danger-6)' : 'var(--color-text-2)' }"/>
+    <a-layout-header v-if="route.path !== '/login'" class="app-header">
+      <div class="header-inner">
+        <div class="brand">
+          <img class="brand-logo" :src="logo" alt="logo" />
+          <router-link class="brand-title" to="/channels">{{ appTitle }}</router-link>
+          <a-tooltip
+            v-if="hasLogined"
+            :content="!haswxLogined ? '未授权，请扫码登录' : '点我扫码授权'"
+            position="bottom"
+          >
+            <icon-scan
+              class="brand-scan"
+              @click="showAuthQrcode()"
+              :style="{ color: !haswxLogined ? 'var(--color-danger-6)' : 'var(--color-text-2)' }"
+            />
           </a-tooltip>
         </div>
-        <a-space>
-            <a-select class="lang-select" :defaultValue="currentLanguage" v-model:value="currentLanguage" @change="handleLanguageChange" size="small">
-              <a-option value="">禁用</a-option>
-              <a-option value="chinese_simplified">简体中文</a-option>
-              <a-option value="chinese_traditional">繁體中文</a-option>
-              <a-option value="english" selected="selected">English</a-option>
-              <a-option value="russian">Русский язык</a-option>
-              <a-option value="corsican">hinaassicurasol</a-option>
-              <a-option value="guarani">ondoho</a-option>
-              <a-option value="kinyarwanda">Kinyarwanda</a-option>
-              <a-option value="hausa">dictionary variant</a-option>
-              <a-option value="norwegian">Norge</a-option>
-              <a-option value="dutch">nederlands</a-option>
-              <a-option value="yoruba">Yoruba</a-option>
-              <a-option value="gongen">गोंगेन हें नांव</a-option>
-              <a-option value="latin">Latina</a-option>
-              <a-option value="nepali">नेपालीName</a-option>
-              <a-option value="french">Français</a-option>
-              <a-option value="czech">český</a-option>
-              <a-option value="hawaiian">panekeʻhaka</a-option>
-              <a-option value="georgian">ჯორჯიანიName</a-option>
-             
-              <a-option value="serbian">Српски</a-option>
-              <a-option value="persian">Persian</a-option>
-              <a-option value="bhojpuri">हमार कपार दर्द करता।</a-option>
-              <a-option value="hindi">हिन्दी</a-option>
-              <a-option value="belarusian">БеларускаяName</a-option>
-              <a-option value="kazakh">қазақ</a-option>
-              <a-option value="swahili">Kiswahili</a-option>
-              <a-option value="icelandic">ÍslandName</a-option>
-              <a-option value="yiddish">ייַדיש</a-option>
-              <a-option value="twi">Ma frɛ</a-option>
-              <a-option value="irish">Íris</a-option>
-              <a-option value="gujarati">ગુજરાતી</a-option>
-              <a-option value="khmer">ភាសា&ZeroWidthSpace;ខ្មែរName</a-option>
-              <a-option value="slovak">Slovenská</a-option>
-              <a-option value="hebrew">היברית</a-option>
-              <a-option value="kannada">ಕನ್ನಡ್Name</a-option>
-              <a-option value="hungarian">magyar</a-option>
-              <a-option value="tamil">தாமில்</a-option>
-              <a-option value="arabic">بالعربية</a-option>
-              <a-option value="bengali">বেঙ্গালী</a-option>
-              <a-option value="azerbaijani">azerbaijani</a-option>
-              <a-option value="samoan">lifiava</a-option>
-              <a-option value="afrikaans">afrikaans</a-option>
-              <a-option value="indonesian">IndonesiaName</a-option>
-              <a-option value="danish">dansk</a-option>
-              <a-option value="shona">Shona</a-option>
-              <a-option value="bambara">Bamanankan</a-option>
-              <a-option value="lithuanian">Lietuva</a-option>
-              <a-option value="vietnamese">Tiếng Việt</a-option>
-              <a-option value="maltese">Malti</a-option>
-              <a-option value="turkmen">Türkmençe</a-option>
-              <a-option value="assamese">assamese</a-option>
-              <a-option value="catalan">català</a-option>
-              <a-option value="singapore">සිංගාපුර්</a-option>
-              <a-option value="cebuano">cebuano</a-option>
-              <a-option value="sanskrit">Sanskrit</a-option>
-              <a-option value="polish">Polski</a-option>
-              <a-option value="galician">galico</a-option>
-              <a-option value="latvian">latviešu</a-option>
-              <a-option value="ukrainian">Україна</a-option>
-              <a-option value="tatar">Татар</a-option>
-              <a-option value="scottish_gaelic">Gàidhlig na h-Alba</a-option>
-              <a-option value="welsh">Iaith Weleg</a-option>
-              <a-option value="japanese">日本語</a-option>
-              <a-option value="filipino">Pilipino</a-option>
-              <a-option value="aymara">aymara.</a-option>
-              <a-option value="lao">ກະຣຸນາ</a-option>
-              <a-option value="telugu">తెలుగుName</a-option>
-              <a-option value="romanian">Română</a-option>
-              <a-option value="haitian_creole">Kreyòl ayisyen</a-option>
-              <a-option value="dogrid">कुकुरमुत्ता</a-option>
-              <a-option value="swedish">Svenska</a-option>
-              <a-option value="maithili">मरातिलीName</a-option>
-              <a-option value="thai">คนไทย</a-option>
-              <a-option value="armenian">Արմենյան</a-option>
-              <a-option value="burmese">ဗာရမ်</a-option>
-              <a-option value="pashto">پښتوName</a-option>
-              <a-option value="hmong">hmong</a-option>
-              <a-option value="dhivehi">ދިވާރީވް</a-option>
-              <a-option value="luxembourgish">LëtzebuergeschName</a-option>
-              <a-option value="sindhi">سنڌي</a-option>
-              <a-option value="kurdish">Kurdî</a-option>
-              <a-option value="turkish">Türkçe</a-option>
-              <a-option value="macedonian">Македонски</a-option>
-              <a-option value="bulgarian">български</a-option>
-              <a-option value="malay">Malay</a-option>
-              <a-option value="luganda">luganda</a-option>
-              <a-option value="marathi">मराठीName</a-option>
-              <a-option value="estonian">eesti keel</a-option>
-              <a-option value="malayalam">മലമാലം</a-option>
-              <a-option value="deutsch">Deutsch</a-option>
-              <a-option value="slovene">slovenščina</a-option>
-              <a-option value="urdu">اوردو</a-option>
-              <a-option value="portuguese">português</a-option>
-              <a-option value="igbo">igbo</a-option>
-              <a-option value="kurdish_sorani">کوردی سۆرانی</a-option>
-              <a-option value="oromo">adeta</a-option>
-              <a-option value="greek">ελληνικά</a-option>
-              <a-option value="spanish">Español</a-option>
-              <a-option value="frisian">frysk</a-option>
-              <a-option value="somali">Soomaali</a-option>
-              <a-option value="amharic">amharic</a-option>
-              <a-option value="nyanja">potakuyan</a-option>
-              <a-option value="punjabi">ਪੰਜਾਬੀName</a-option>
-              <a-option value="basque">baskoa</a-option>
-              <a-option value="italian">italiano</a-option>
-              <a-option value="albanian">albanian</a-option>
-              <a-option value="korean">한국어</a-option>
-              <a-option value="tajik">ТаjikӣName</a-option>
-              <a-option value="finnish">suomi</a-option>
-              <a-option value="kyrgyz">Кыргыз тили</a-option>
-              <a-option value="ewe">Eʋegbe</a-option>
-              <a-option value="croatian">hrvatski</a-option>
-              <a-option value="creole">a n:n</a-option>
-              <a-option value="quechua">Quechua</a-option>
-              <a-option value="bosnian">bosnian</a-option>
-              <a-option value="maori">Maori</a-option>
-            </a-select>
-        </a-space>
-      </div>
-      <div class="header-center">
-        <Navbar />
-      </div>
-      <div class="header-right" v-if="hasLogined">
-        <a-tooltip content="关注后每天自动推送AI摘要与精选文章" position="bottom">
-          <a-link @click="showPromoModal" style="margin-right: 20px; cursor: pointer;" type="text">关注柠檬博士</a-link>
-        </a-tooltip>
 
+        <div class="header-nav">
+          <Navbar />
+        </div>
 
+        <div class="header-actions">
+          <a-select
+            v-model:value="themeMode"
+            class="theme-select"
+            size="small"
+            :trigger-props="{ autoFitPopupMinWidth: true }"
+            @change="handleThemeChange"
+          >
+            <a-option value="system">System</a-option>
+            <a-option value="light">Light</a-option>
+            <a-option value="dark">Dark</a-option>
+          </a-select>
 
-        <a-dropdown position="br" trigger="click">
-          <div class="user-info">
-            <a-avatar :size="36">
-              <img v-if="userInfo.avatar" :src="userInfo.avatar" alt="avatar">
-              <icon-user v-else />
-            </a-avatar>
-            <span class="username">{{ userInfo.username }}</span>
-          </div>
-          <template #content>
-            <a-doption @click="goToEditUser">
-              <template #icon><icon-user /></template>
-              个人中心
-            </a-doption>
-            <a-doption @click="goToChangePassword">
-              <template #icon><icon-lock /></template>
-              修改密码
-            </a-doption>
-            <a-doption @click="showAuthQrcode">
-              <template #icon><icon-scan /></template>
-              扫码授权
-            </a-doption>
-            <a-doption @click="handleLogout">
-              <template #icon><icon-user /></template>
-              退出登录
-            </a-doption>
-          </template>
-        </a-dropdown>
-        <WechatAuthQrcode ref="qrcodeRef" />
-        <a-modal
-          v-model:visible="promoVisible"
-          title="关注「柠檬博士」"
-          :footer="false"
-          :style="{ zIndex: 1000 }"
-          unmount-on-close
-          @close="dismissPromo"
-        >
-          <div style="text-align: center;">
-            <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
-            <img
-              v-if="!promoQrError"
-              :src="promoQrSrc"
-              alt="柠檬博士公众号二维码"
-              style="max-width: 320px; margin-top: 16px; border-radius: 12px;"
-              @error="promoQrError = true"
-            >
-            <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
-              二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
+          <a-select
+            v-model:value="currentLanguage"
+            class="lang-select"
+            size="small"
+            :trigger-props="{ autoFitPopupMinWidth: true }"
+            @change="handleLanguageChange"
+          >
+            <a-option v-for="opt in languageOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </a-option>
+          </a-select>
+
+          <a-tooltip v-if="hasLogined" content="关注后每天自动推送AI摘要与精选文章" position="bottom">
+            <a-button class="promo-btn" type="text" @click="showPromoModal">关注柠檬博士</a-button>
+          </a-tooltip>
+
+          <a-dropdown v-if="hasLogined" position="br" trigger="click">
+            <div class="user-pill">
+              <a-avatar :size="28">
+                <img v-if="userInfo.avatar" :src="userInfo.avatar" alt="avatar" />
+                <icon-user v-else />
+              </a-avatar>
+              <span class="username">{{ userInfo.username }}</span>
             </div>
-            <div style="margin-top: 16px;">
-              <a-button type="primary" @click="dismissPromo">我已关注</a-button>
-            </div>
-          </div>
-        </a-modal>
+            <template #content>
+              <a-doption @click="goToEditUser">
+                <template #icon><icon-user /></template>
+                个人中心
+              </a-doption>
+              <a-doption @click="goToChangePassword">
+                <template #icon><icon-lock /></template>
+                修改密码
+              </a-doption>
+              <a-doption @click="showAuthQrcode">
+                <template #icon><icon-scan /></template>
+                扫码授权
+              </a-doption>
+              <a-doption @click="handleLogout">
+                <template #icon><icon-user /></template>
+                退出登录
+              </a-doption>
+            </template>
+          </a-dropdown>
+        </div>
       </div>
+      <WechatAuthQrcode ref="qrcodeRef" />
+      <a-modal
+        v-model:visible="promoVisible"
+        title="关注「柠檬博士」"
+        :footer="false"
+        :style="{ zIndex: 1000 }"
+        unmount-on-close
+        @close="dismissPromo"
+      >
+        <div style="text-align: center;">
+          <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
+          <img
+            v-if="!promoQrError"
+            :src="promoQrSrc"
+            alt="柠檬博士公众号二维码"
+            style="max-width: 320px; margin-top: 16px; border-radius: 12px;"
+            @error="promoQrError = true"
+          />
+          <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
+            二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
+          </div>
+          <div style="margin-top: 16px;">
+            <a-button type="primary" @click="dismissPromo">我已关注</a-button>
+          </div>
+        </div>
+      </a-modal>
     </a-layout-header>
 
     <a-layout>
-
-      <!-- 主内容区 -->
       <a-layout>
         <a-layout-content class="app-content">
           <router-view />
@@ -211,17 +119,35 @@
 </template>
 
 <script setup lang="ts">
-import translate from 'i18n-jsautotranslate'
-import { ref,watchEffect, computed, onMounted, watch, provide } from 'vue'
-import { Modal } from '@arco-design/web-vue/es/modal'
-import {getSysInfo} from '@/api/sysInfo'
-const currentLanguage = ref(localStorage.getItem('language') || 'chinese_simplified');
+import { computed, onMounted, provide, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Message } from '@arco-design/web-vue'
+import { getCurrentUser, logout } from '@/api/auth'
+import { getSysInfo } from '@/api/sysInfo'
+import Navbar from '@/components/Layout/Navbar.vue'
+import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
+import { initBrowserNotification } from '@/utils/browserNotification'
+import { translatePage, setCurrentLanguage } from '@/utils/translate'
+import { getThemeMode, setThemeMode, type ThemeMode } from '@/utils/theme'
 
+const languageOptions = [
+  { value: '', label: '语言：禁用' },
+  { value: 'chinese_simplified', label: '语言：简体中文' },
+  { value: 'english', label: '语言：English' },
+]
 
+const currentLanguage = ref(localStorage.getItem('language') || 'chinese_simplified')
 const handleLanguageChange = (language: string) => {
-  setCurrentLanguage(language);
-  currentLanguage.value = language;
-};
+  setCurrentLanguage(language)
+  currentLanguage.value = language
+}
+
+const themeMode = ref<ThemeMode>(getThemeMode())
+const handleThemeChange = (mode: ThemeMode) => {
+  themeMode.value = mode
+  setThemeMode(mode)
+}
+watch(themeMode, (m) => setThemeMode(m))
 
 const PROMO_SEEN_KEY = 'promo_lemon_doctor_seen_v1'
 const promoVisible = ref(false)
@@ -238,30 +164,19 @@ const dismissPromo = () => {
   promoVisible.value = false
   localStorage.setItem(PROMO_SEEN_KEY, '1')
 }
-import { 
-  initBrowserNotification 
-} from '@/utils/browserNotification'
-	import { useRouter, useRoute } from 'vue-router'
-	import { Message } from '@arco-design/web-vue'
-	import { getCurrentUser } from '@/api/auth'
-	import { logout } from '@/api/auth'
-	import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
-	import Navbar from '@/components/Layout/Navbar.vue'
 
 const qrcodeRef = ref()
 const showAuthQrcode = () => {
   qrcodeRef.value?.startAuth()
 }
 provide('showAuthQrcode', showAuthQrcode)
+
 const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || '微信公众号订阅助手')
-const logo = ref("/static/logo.svg")
+const logo = ref('/static/logo.svg')
 const router = useRouter()
 const route = useRoute()
-const collapsed = ref(false)
-const userInfo = ref({
-  username: '',
-  avatar: ''
-})
+
+const userInfo = ref({ username: '', avatar: '' })
 const haswxLogined = ref(true)
 const hasLogined = ref(false)
 const isAuthenticated = computed(() => {
@@ -281,53 +196,35 @@ const fetchUserInfo = async () => {
 const fetchSysInfo = async () => {
   try {
     const res = await getSysInfo()
-    haswxLogined.value = res?.wx?.login||false
+    haswxLogined.value = res?.wx?.login || false
   } catch (error) {
     console.error('获取系统信息失败', error)
   }
 }
 
-const handleCollapse = (val: boolean) => {
-  collapsed.value = val
-}
-
-const handleMenuClick = (key: string) => {
-  router.push({ name: key })
-}
-
-const goToEditUser = () => {
-  router.push({ name: 'EditUser' })
-}
-
-const goToChangePassword = () => {
-  router.push({ name: 'ChangePassword' })
-}
+const goToEditUser = () => router.push({ name: 'EditUser' })
+const goToChangePassword = () => router.push({ name: 'ChangePassword' })
 
 const handleLogout = async () => {
   try {
     await logout()
     localStorage.removeItem('token')
     router.push('/login')
-  } catch (error) {
+  } catch {
     Message.error('退出登录失败')
   }
 }
 
 onMounted(() => {
- 
-  if (isAuthenticated.value) {
-    fetchUserInfo()
-  }
+  if (isAuthenticated.value) fetchUserInfo()
   initBrowserNotification()
-  translatePage();
-  fetchSysInfo();
+  translatePage()
+  fetchSysInfo()
 
-  // Show promo modal once per device (logged-in users only).
   if (isAuthenticated.value && !localStorage.getItem(PROMO_SEEN_KEY)) {
     promoVisible.value = true
   }
 })
-import { translatePage, setCurrentLanguage } from '@/utils/translate';
 
 watch(
   () => route.path,
@@ -335,9 +232,7 @@ watch(
     hasLogined.value = !!localStorage.getItem('token')
     if (hasLogined.value) {
       fetchUserInfo()
-      if (!localStorage.getItem(PROMO_SEEN_KEY)) {
-        promoVisible.value = true
-      }
+      if (!localStorage.getItem(PROMO_SEEN_KEY)) promoVisible.value = true
     }
   }
 )
@@ -348,11 +243,7 @@ watch(
   min-height: 100vh;
 }
 
-
 .app-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   padding: 0 16px;
   height: var(--app-header-height);
   position: sticky;
@@ -363,17 +254,47 @@ watch(
   border-bottom: 1px solid var(--color-border);
 }
 
-.header-left {
+.header-inner {
+  max-width: 1320px;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
-.lang-select {
-  width: 120px;
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
 }
 
-.header-center {
+.brand-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-1);
+}
+
+.brand-title:hover {
+  text-decoration: none;
+}
+
+.brand-scan {
+  cursor: pointer;
+}
+
+.header-nav {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -383,61 +304,56 @@ watch(
   scrollbar-width: none;
 }
 
-.header-center::-webkit-scrollbar {
+.header-nav::-webkit-scrollbar {
   display: none;
 }
 
-.logo {
+.header-actions {
   display: flex;
   align-items: center;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
-.logo svg {
-  margin-right: 10px;
-  font-size: 24px;
-  color: var(--primary-color);
+.theme-select,
+.lang-select {
+  width: 132px;
 }
 
-.header-right {
+.header-actions :deep(.arco-select-view) {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg-2) 86%, transparent);
+}
+
+.promo-btn :deep(.arco-btn) {
+  border-radius: 999px;
+}
+
+.user-pill {
   display: flex;
   align-items: center;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-2) 86%, transparent);
   cursor: pointer;
 }
 
 .username {
-  margin-left: 10px;
+  font-size: 13px;
+  color: var(--color-text-1);
 }
 
 .app-content {
-  /* padding: 20px; */
   background: var(--color-bg-1);
   min-height: calc(100vh - var(--app-header-height));
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
 @media (max-width: 720px) {
-  .app-header .header-right {
-    display: none !important;
-  }
-  .app-header :deep(.lang-select) {
+  .header-actions {
     display: none !important;
   }
 }
 </style>
+

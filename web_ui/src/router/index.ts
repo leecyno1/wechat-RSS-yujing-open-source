@@ -14,6 +14,8 @@ import MessageTaskForm from '../views/MessageTaskForm.vue'
 import NovelReader from '../views/NovelReader.vue'
 import Favorites from '../views/Favorites.vue'
 import ChannelsPublic from '../views/ChannelsPublic.vue'
+import InfoLayout from '../views/InfoLayout.vue'
+import ManageLayout from '../views/ManageLayout.vue'
 
 const routes = [
   {
@@ -22,9 +24,7 @@ const routes = [
     children: [
       {
         path: '',
-        name: 'Home',
-        component: ArticleList,
-        meta: { requiresAuth: true }
+        redirect: '/channels'
       },
       {
         path: 'change-password',
@@ -56,12 +56,7 @@ const routes = [
       
       {
         path: 'configs',
-        name: 'ConfigList',
-        component: ConfigList,
-        meta: { 
-          requiresAuth: true,
-          permissions: ['config:view'] 
-        }
+        redirect: () => ({ path: '/info/configs' })
       },
       {
         path: 'export/records',
@@ -87,14 +82,41 @@ const routes = [
         meta: { requiresAuth: false }
       },
       {
+        path: 'manage',
+        component: ManageLayout,
+        meta: { requiresAuth: true },
+        children: [
+          { path: '', redirect: '/manage/subscriptions' },
+          {
+            path: 'subscriptions',
+            name: 'ManageSubscriptions',
+            component: ArticleList,
+            meta: { requiresAuth: true },
+          },
+          {
+            path: 'topics',
+            name: 'ManageTopics',
+            component: () => import('@/views/TagList.vue'),
+            meta: { requiresAuth: true, permissions: ['tag:view'] },
+          },
+          {
+            path: 'topics/add',
+            name: 'ManageTopicAdd',
+            component: () => import('@/views/TagForm.vue'),
+            meta: { requiresAuth: true, permissions: ['tag:edit'] },
+          },
+          {
+            path: 'topics/edit/:id',
+            name: 'ManageTopicEdit',
+            component: () => import('@/views/TagForm.vue'),
+            props: true,
+            meta: { requiresAuth: true, permissions: ['tag:edit'] },
+          },
+        ],
+      },
+      {
         path: 'configs/:key',
-        name: 'ConfigDetail',
-        component: ConfigDetail,
-        props: true,
-        meta: { 
-          requiresAuth: true,
-          permissions: ['config:view'] 
-        }
+        redirect: (to) => ({ path: `/info/configs/${to.params.key}` })
       },
       {
         path: 'message-tasks',
@@ -125,41 +147,61 @@ const routes = [
         }
       },
       {
+        path: 'info',
+        component: InfoLayout,
+        children: [
+          {
+            path: '',
+            redirect: '/info/system',
+          },
+          {
+            path: 'system',
+            name: 'SysInfo',
+            component: () => import('@/views/SysInfo.vue'),
+            meta: {
+              requiresAuth: true,
+              permissions: ['admin'],
+            },
+          },
+          {
+            path: 'configs',
+            name: 'ConfigList',
+            component: ConfigList,
+            meta: {
+              requiresAuth: true,
+              permissions: ['config:view'],
+            },
+          },
+          {
+            path: 'configs/:key',
+            name: 'ConfigDetail',
+            component: ConfigDetail,
+            props: true,
+            meta: {
+              requiresAuth: true,
+              permissions: ['config:view'],
+            },
+          },
+        ],
+      },
+      {
         path: 'sys-info',
-        name: 'SysInfo',
-        component: () => import('@/views/SysInfo.vue'),
-        meta: { 
-          requiresAuth: true,
-          permissions: ['admin'] 
-        }
+        redirect: () => ({ path: '/info/system' })
       },
       {
         path: 'tags',
-        name: 'TagList',
-        component: () => import('@/views/TagList.vue'),
-        meta: { 
-          requiresAuth: true,
-          permissions: ['tag:view'] 
-        }
+        redirect: '/manage/topics',
+        meta: { requiresAuth: true, permissions: ['tag:view'] },
       },
       {
         path: 'tags/add',
-        name: 'TagAdd',
-        component: () => import('@/views/TagForm.vue'),
-        meta: { 
-          requiresAuth: true,
-          permissions: ['tag:edit'] 
-        }
+        redirect: '/manage/topics/add',
+        meta: { requiresAuth: true, permissions: ['tag:edit'] },
       },
       {
         path: 'tags/edit/:id',
-        name: 'TagEdit',
-        component: () => import('@/views/TagForm.vue'),
-        props: true,
-        meta: { 
-          requiresAuth: true,
-          permissions: ['tag:edit'] 
-        }
+        redirect: (to) => ({ path: `/manage/topics/edit/${to.params.id}` }),
+        meta: { requiresAuth: true, permissions: ['tag:edit'] },
       },
     ]
   },

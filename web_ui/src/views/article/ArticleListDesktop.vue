@@ -2,7 +2,7 @@
   <a-spin :loading="fullLoading" tip="正在刷新..." size="large">
     <a-layout class="article-list">
       
-      <a-layout-sider :width="220"
+      <a-layout-sider :width="180"
         :style="{ background: 'var(--color-bg-1)', padding: '0', borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column' }">
         <a-card :bordered="false" title="公众号"
           :headStyle="{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-1)', zIndex: 1, border: 0 }">
@@ -34,9 +34,9 @@
             <a-list :data="mpList" :loading="mpLoading" bordered>
               <template #item="{ item, index }">
                 <a-list-item @click="handleMpClick(item.id)" :class="{ 'active-mp': activeMpId === item.id }"
-                  style="padding: 9px 8px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                  style="padding: 8px 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
                   <div style="display: flex; align-items: center;">
-                    <img :src="Avatar(item.avatar)" width="40" style="float:left;margin-right:1rem;" />
+                    <img :src="Avatar(item.avatar)" width="44" style="float:left;margin-right:10px;border-radius:10px;" />
                     <a-typography-text strong style="line-height:32px;">
                       {{ item.name || item.mp_name }}
                     </a-typography-text>

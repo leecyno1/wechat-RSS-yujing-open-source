@@ -13,7 +13,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color-scheme: light dark;
-  background: var(--color-bg-1);
+  background:
+    radial-gradient(900px circle at 12% -6%, color-mix(in srgb, var(--color-primary-1) 55%, transparent), transparent 58%),
+    radial-gradient(760px circle at 92% -10%, color-mix(in srgb, var(--color-success-1) 40%, transparent), transparent 55%),
+    radial-gradient(720px circle at 68% 8%, color-mix(in srgb, var(--color-warning-1) 26%, transparent), transparent 62%),
+    var(--color-bg-1);
+  background-attachment: fixed;
   color: var(--color-text-1);
 }
 
