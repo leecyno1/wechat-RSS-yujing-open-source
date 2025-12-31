@@ -20,7 +20,7 @@
           :headStyle="{ padding: '12px 16px', borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-1)', zIndex: 1, border: 0 }">
           <template #extra>
             <a-dropdown>
-              <a-button type="primary">
+              <a-button type="primary" size="small">
                 <template #icon><icon-plus /></template>
                 订阅
                 <icon-down />

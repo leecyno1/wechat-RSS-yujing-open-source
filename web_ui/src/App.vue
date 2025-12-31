@@ -172,7 +172,7 @@ const showAuthQrcode = () => {
 }
 provide('showAuthQrcode', showAuthQrcode)
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'doctor lemon订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
 const logo = lemonIcon
 const router = useRouter()
 const route = useRoute()
@@ -245,7 +245,7 @@ watch(
 }
 
 .app-header {
-  padding: 0 16px;
+  padding: 0 8px;
   height: var(--app-header-height);
   position: sticky;
   top: 0;
@@ -256,9 +256,8 @@ watch(
 }
 
 .header-inner {
-  max-width: 1320px;
+  width: 100%;
   height: 100%;
-  margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 14px;

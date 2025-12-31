@@ -68,7 +68,7 @@ import { Message } from '@arco-design/web-vue'
 import { login } from '@/api/auth'
 import drLemonLogo from '@/assets/drlemon-logo.svg'
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'doctor lemon订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
 
 const router = useRouter()
 const loading = ref(false)

@@ -13,7 +13,8 @@
             <a-button
               class="tab-btn"
               :type="leftTab === 'feeds' ? 'primary' : 'outline'"
-              size="small"
+              size="mini"
+              long
               @click="showAllFeeds"
             >
               全部订阅
@@ -22,7 +23,8 @@
             <a-button
               class="tab-btn"
               :type="leftTab === 'topics' ? 'primary' : 'outline'"
-              size="small"
+              size="mini"
+              long
               @click="leftTab = 'topics'"
             >
               我的专题
@@ -31,7 +33,7 @@
           </div>
 
           <div class="sider-search">
-            <a-input v-model="channelKw" allow-clear placeholder="搜索订阅" @press-enter="loadFeeds" />
+            <a-input v-model="channelKw" size="small" allow-clear placeholder="搜索订阅" @press-enter="loadFeeds" />
           </div>
         </div>
 
@@ -39,7 +41,7 @@
           <div v-if="leftTab === 'feeds'" class="sider-list">
             <div class="sider-section">
               <div class="section-title">已订阅频道</div>
-              <a-select v-model="feedSort" size="small" style="width: 120px" @change="loadFeeds">
+              <a-select v-model="feedSort" size="small" style="width: 110px" @change="loadFeeds">
                 <a-option value="recent">最近更新</a-option>
                 <a-option value="created">创建时间</a-option>
                 <a-option value="name">名称</a-option>
@@ -805,6 +807,8 @@ onUnmounted(() => {
   min-width: 240px;
   max-width: 240px;
   flex: 0 0 240px;
+  position: relative;
+  z-index: 3;
   border-right: 1px solid var(--color-neutral-3);
   background: var(--color-bg-1);
   overflow: hidden;
@@ -815,12 +819,16 @@ onUnmounted(() => {
 .content {
   min-width: 520px;
   flex: 1 1 auto;
+  position: relative;
+  z-index: 1;
 }
 .reader {
   width: 380px;
   min-width: 380px;
   max-width: 380px;
   flex: 0 0 380px;
+  position: relative;
+  z-index: 2;
 }
 .sider-top {
   padding: 8px 8px 6px;
@@ -844,6 +852,9 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
 }
 .sider-search {
   padding-top: 2px;
