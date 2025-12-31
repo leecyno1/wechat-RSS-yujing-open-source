@@ -792,9 +792,13 @@ onUnmounted(() => {
 <style scoped>
 .channels-page {
   height: calc(100vh - var(--app-header-height));
+  overflow: hidden;
 }
 .channels-layout {
   height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
 }
 .sider {
   width: 180px;
@@ -807,6 +811,16 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.content {
+  min-width: 680px;
+  flex: 1 1 auto;
+}
+.reader {
+  width: 420px;
+  min-width: 420px;
+  max-width: 420px;
+  flex: 0 0 420px;
 }
 .sider-top {
   padding: 8px 8px 6px;

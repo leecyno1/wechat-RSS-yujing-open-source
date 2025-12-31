@@ -811,10 +811,21 @@ const toggleReadStatus = async (record: any) => {
   /* height: calc(100vh - 186px); */
   width: 100%;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+}
+
+.article-list :deep(.arco-layout-sider) {
+  flex: 0 0 180px;
+  min-width: 180px;
+  max-width: 180px;
+  width: 180px;
 }
 
 .article-list :deep(.arco-layout-content) {
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 720px;
 }
 
 .article-list :deep(.arco-table-container) {
