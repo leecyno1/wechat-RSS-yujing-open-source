@@ -172,7 +172,7 @@ const showAuthQrcode = () => {
 }
 provide('showAuthQrcode', showAuthQrcode)
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'doctor lemon订阅助手')
 const logo = lemonIcon
 const router = useRouter()
 const route = useRoute()

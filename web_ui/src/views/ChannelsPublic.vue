@@ -1,7 +1,7 @@
 <template>
   <div class="channels-page">
     <a-layout class="channels-layout">
-      <a-layout-sider class="sider" :width="180">
+      <a-layout-sider class="sider" :width="240">
         <div class="sider-top">
           <div class="sider-title">
             <span>订阅</span>
@@ -165,7 +165,7 @@
         </a-spin>
       </a-layout-content>
 
-      <a-layout-sider class="reader" :width="420">
+      <a-layout-sider class="reader" :width="380">
         <div class="reader-inner">
           <div v-if="!activeArticleId" class="empty">选择一篇文章查看速览</div>
           <a-spin v-else :loading="insightLoading">
@@ -801,10 +801,10 @@ onUnmounted(() => {
   flex-wrap: nowrap;
 }
 .sider {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
-  flex: 0 0 180px;
+  width: 240px;
+  min-width: 240px;
+  max-width: 240px;
+  flex: 0 0 240px;
   border-right: 1px solid var(--color-neutral-3);
   background: var(--color-bg-1);
   overflow: hidden;
@@ -813,14 +813,14 @@ onUnmounted(() => {
   min-height: 0;
 }
 .content {
-  min-width: 680px;
+  min-width: 520px;
   flex: 1 1 auto;
 }
 .reader {
-  width: 420px;
-  min-width: 420px;
-  max-width: 420px;
-  flex: 0 0 420px;
+  width: 380px;
+  min-width: 380px;
+  max-width: 380px;
+  flex: 0 0 380px;
 }
 .sider-top {
   padding: 8px 8px 6px;

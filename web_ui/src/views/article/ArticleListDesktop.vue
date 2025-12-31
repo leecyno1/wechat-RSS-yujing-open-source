@@ -3,17 +3,17 @@
     <a-layout class="article-list">
       
       <a-layout-sider
-        :width="180"
+        :width="240"
         :style="{
           background: 'var(--color-bg-1)',
           padding: '0',
           borderRight: '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
-          flex: '0 0 180px',
-          minWidth: '180px',
-          maxWidth: '180px',
-          width: '180px',
+          flex: '0 0 240px',
+          minWidth: '240px',
+          maxWidth: '240px',
+          width: '240px',
         }"
       >
         <a-card :bordered="false" title="公众号"
@@ -817,15 +817,15 @@ const toggleReadStatus = async (record: any) => {
 }
 
 .article-list :deep(.arco-layout-sider) {
-  flex: 0 0 180px;
-  min-width: 180px;
-  max-width: 180px;
-  width: 180px;
+  flex: 0 0 240px;
+  min-width: 240px;
+  max-width: 240px;
+  width: 240px;
 }
 
 .article-list :deep(.arco-layout-content) {
   flex: 1 1 auto;
-  min-width: 720px;
+  min-width: 640px;
 }
 
 .article-list :deep(.arco-table-container) {
