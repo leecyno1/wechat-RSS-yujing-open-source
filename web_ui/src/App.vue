@@ -298,7 +298,7 @@ watch(
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;

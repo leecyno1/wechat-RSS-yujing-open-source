@@ -11,6 +11,29 @@ const setArcoThemeAttr = (isDark: boolean) => {
   else document.body.removeAttribute('arco-theme')
 }
 
+const setColorScheme = (isDark: boolean) => {
+  try {
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+  } catch {
+    // ignore
+  }
+}
+
+const applyTheme = (isDark: boolean) => {
+  setColorScheme(isDark)
+  if (document.body) setArcoThemeAttr(isDark)
+  else {
+    // If body isn't ready (e.g. script in <head>), retry until it exists.
+    let tries = 0
+    const tick = () => {
+      tries += 1
+      if (document.body) return setArcoThemeAttr(isDark)
+      if (tries < 60) setTimeout(tick, 16)
+    }
+    tick()
+  }
+}
+
 export const getThemeMode = (): ThemeMode => {
   try {
     const raw = String(localStorage.getItem(THEME_MODE_KEY) || '').trim()
@@ -36,23 +59,21 @@ export const applyThemeMode = (mode: ThemeMode) => {
   mediaListener = null
 
   if (mode === 'dark') {
-    setArcoThemeAttr(true)
+    applyTheme(true)
     return
   }
 
   if (mode === 'light') {
-    setArcoThemeAttr(false)
+    applyTheme(false)
     return
   }
 
   media = window.matchMedia?.('(prefers-color-scheme: dark)') || null
   if (!media) return
 
-  const apply = (isDark: boolean) => setArcoThemeAttr(isDark)
-  mediaListener = (e: MediaQueryListEvent) => apply(e.matches)
+  mediaListener = (e: MediaQueryListEvent) => applyTheme(e.matches)
 
-  if (document.body) apply(media.matches)
-  else window.addEventListener('DOMContentLoaded', () => apply(media?.matches || false), { once: true })
+  applyTheme(media.matches)
 
   if (typeof media.addEventListener === 'function') media.addEventListener('change', mediaListener)
   else if (typeof (media as any).addListener === 'function') (media as any).addListener(mediaListener)
@@ -70,4 +91,3 @@ export const setThemeMode = (mode: ThemeMode) => {
 export const initTheme = () => {
   applyThemeMode(getThemeMode())
 }
-

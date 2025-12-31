@@ -49,6 +49,43 @@ a:hover {
   --app-radius-lg: 18px;
 }
 
+/* ========== Scrollbars (Light/Dark) ========== */
+:root {
+  --scrollbar-track: color-mix(in srgb, var(--color-bg-2) 92%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-text-4) 45%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text-4) 65%, transparent);
+}
+
+body[arco-theme='dark'] {
+  --scrollbar-track: #0b0c0f;
+  --scrollbar-thumb: #2a2f3a;
+  --scrollbar-thumb-hover: #3a4252;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
 /* ========== 设计系统变量 ========== */
 :root {
   /* 间距系统 */
