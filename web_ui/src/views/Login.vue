@@ -700,9 +700,14 @@ const handleRegister = async () => {
 :deep(.arco-btn-primary) {
   background: var(--color-primary-6) !important;
   border: none !important;
+  color: var(--color-white, #fff) !important;
 }
 
 :deep(.arco-btn-primary:hover) {
   background: var(--color-primary-5) !important;
+}
+
+:deep(.arco-btn-primary .arco-btn-text) {
+  color: var(--color-white, #fff) !important;
 }
 </style>
