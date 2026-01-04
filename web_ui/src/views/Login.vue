@@ -51,6 +51,12 @@
                 登录
               </a-button>
             </a-form-item>
+
+            <a-form-item>
+              <div class="login-extra">
+                <a-button type="text" size="small" @click="openRegister">注册新账号</a-button>
+              </div>
+            </a-form-item>
           </a-form>
         </a-card>
       </div>
@@ -59,13 +65,33 @@
       <div class="copyright">Design By Rachel</div>
     </div>
   </div>
+
+  <a-modal v-model:visible="registerVisible" title="注册新账号" :mask-closable="false" @ok="handleRegister" :confirm-loading="registerLoading">
+    <a-form :model="registerForm" layout="vertical">
+      <a-form-item field="username" label="帐号">
+        <a-input v-model="registerForm.username" placeholder="2-50位" />
+      </a-form-item>
+      <a-form-item field="password" label="密码">
+        <a-input-password v-model="registerForm.password" placeholder="至少6位" />
+      </a-form-item>
+      <a-form-item field="email" label="邮箱(可选)">
+        <a-input v-model="registerForm.email" placeholder="name@example.com" />
+      </a-form-item>
+    </a-form>
+    <template #footer>
+      <a-space>
+        <a-button @click="registerVisible = false">取消</a-button>
+        <a-button type="primary" :loading="registerLoading" @click="handleRegister">注册并登录</a-button>
+      </a-space>
+    </template>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { login } from '@/api/auth'
+import { login, register } from '@/api/auth'
 import drLemonLogo from '@/assets/drlemon-logo.svg'
 
 const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
@@ -76,6 +102,19 @@ const form = ref({
   username: '',
   password: ''
 })
+
+const registerVisible = ref(false)
+const registerLoading = ref(false)
+const registerForm = ref<{ username: string; password: string; email: string }>({
+  username: '',
+  password: '',
+  email: ''
+})
+
+const openRegister = () => {
+  registerForm.value = { username: form.value.username || '', password: '', email: '' }
+  registerVisible.value = true
+}
 
 const handleSubmit = async () => {
   loading.value = true
@@ -114,6 +153,41 @@ const handleSubmit = async () => {
     // Message.error(errorMsg)
   } finally {
     loading.value = false
+  }
+}
+
+const handleRegister = async () => {
+  if (registerLoading.value) return
+
+  const username = registerForm.value.username.trim()
+  const password = registerForm.value.password
+  const email = registerForm.value.email.trim()
+
+  if (!username || username.length < 2) {
+    Message.error('请输入至少2位的帐号')
+    return
+  }
+  if (!password || password.length < 6) {
+    Message.error('请输入至少6位的密码')
+    return
+  }
+
+  registerLoading.value = true
+  try {
+    const res: any = await register({ username, password, email: email || undefined })
+    if (res?.access_token) {
+      localStorage.setItem('token', res.access_token)
+      localStorage.setItem('token_expire', Date.now() + ((res.expires_in || 0) * 1000))
+      registerVisible.value = false
+      await router.push('/channels')
+      Message.success('注册成功')
+      return
+    }
+    throw new Error('无效的响应格式')
+  } catch (e: any) {
+    Message.error((typeof e === 'string' ? e : e?.message) || '注册失败')
+  } finally {
+    registerLoading.value = false
   }
 }
 </script>
@@ -206,6 +280,12 @@ const handleSubmit = async () => {
   backdrop-filter: blur(5px);
   border: none;
   box-shadow: none;
+}
+
+.login-extra {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .login-form {

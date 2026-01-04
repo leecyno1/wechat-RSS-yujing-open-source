@@ -22,6 +22,16 @@ export const login = (data: LoginParams) => {
   })
 }
 
+export interface RegisterParams {
+  username: string
+  password: string
+  email?: string
+}
+
+export const register = (data: RegisterParams) => {
+  return http.post<LoginResult & { expires_in?: number }>('/wx/auth/register', data)
+}
+
 export interface VerifyResult {
   is_valid: boolean
   username: string

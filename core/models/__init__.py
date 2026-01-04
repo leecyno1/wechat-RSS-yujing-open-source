@@ -15,5 +15,9 @@ from .article_note import ArticleNote
 # 用户订阅/阅读状态（多用户隔离）
 from .user_subscription import UserSubscription
 from .user_article_state import UserArticleState
+# 用户公众号绑定/机器人待发送消息（为公域多用户推送准备）
+from .user_wechat_binding import UserWechatBinding
+from .user_message_outbox import UserMessageOutbox
+from .user_bind_code import UserBindCode
 # 导入基础模型
 from .base import *

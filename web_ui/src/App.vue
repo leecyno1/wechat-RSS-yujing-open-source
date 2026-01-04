@@ -101,8 +101,68 @@
           <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
             二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
           </div>
-          <div style="margin-top: 16px;">
-            <a-button type="primary" @click="dismissPromo">我已关注</a-button>
+
+          <div style="max-width: 520px; margin: 18px auto 0; text-align: left;">
+            <div v-if="bindingLoading" style="text-align: center; padding: 10px 0;">
+              <a-spin size="large" />
+            </div>
+
+            <template v-else>
+              <a-alert v-if="wechatBinding.is_bound" type="success" show-icon>
+                已绑定（{{ wechatBinding.wechat_openid_masked || '已完成' }}），后续将按你的订阅发送每日精选与摘要。
+              </a-alert>
+
+              <template v-else>
+                <a-alert type="info" show-icon>
+                  绑定步骤：关注公众号 → 把下方“绑定码”发给公众号 → 点击“刷新绑定状态”。
+                </a-alert>
+
+                <div
+                  style="
+                    margin-top: 12px;
+                    padding: 12px 14px;
+                    border-radius: 14px;
+                    border: 1px solid var(--color-border-2);
+                    background: var(--color-bg-2);
+                  "
+                >
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                    <div style="text-align: left;">
+                      <div style="font-size: 12px; color: var(--color-text-3);">绑定码</div>
+                      <div
+                        style="
+                          font-size: 20px;
+                          font-weight: 650;
+                          letter-spacing: 0.06em;
+                          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                        "
+                      >
+                        {{ bindCodeText }}
+                      </div>
+                      <div v-if="bindCodeExpiresText" style="margin-top: 4px; font-size: 12px; color: var(--color-text-3);">
+                        {{ bindCodeExpiresText }}
+                      </div>
+                    </div>
+
+                    <a-space>
+                      <a-button size="small" :loading="codeLoading" @click="copyBindCode" :disabled="!bindCodeText || bindCodeText === '-'">
+                        复制
+                      </a-button>
+                      <a-button size="small" :loading="codeLoading" @click="generateBindCode(true)">
+                        重新生成
+                      </a-button>
+                    </a-space>
+                  </div>
+                </div>
+              </template>
+
+              <div style="margin-top: 14px; text-align: center;">
+                <a-space>
+                  <a-button type="primary" :loading="bindingLoading" @click="refreshBinding">刷新绑定状态</a-button>
+                  <a-button @click="dismissPromo">关闭</a-button>
+                </a-space>
+              </div>
+            </template>
           </div>
         </div>
       </a-modal>
@@ -124,6 +184,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { getCurrentUser, logout } from '@/api/auth'
 import { getSysInfo } from '@/api/sysInfo'
+import { createWechatBindCode, getWechatBinding, type WechatBindCode, type WechatBindingInfo } from '@/api/binding'
 import Navbar from '@/components/Layout/Navbar.vue'
 import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
 import { initBrowserNotification } from '@/utils/browserNotification'
@@ -155,10 +216,82 @@ const promoVisible = ref(false)
 const promoQrSrc = computed(() => `/api/v1/wx/sys/promo/qr?v=1`)
 const promoQrError = ref(false)
 
+const bindingLoading = ref(false)
+const codeLoading = ref(false)
+const wechatBinding = ref<WechatBindingInfo>({
+  user_id: '',
+  is_bound: false,
+  wechat_openid_masked: '',
+  wechat_unionid_masked: '',
+  bind_code: null,
+})
+
+const bindCodeText = computed(() => wechatBinding.value?.bind_code?.code || '-')
+const bindCodeExpiresText = computed(() => {
+  const c = wechatBinding.value?.bind_code
+  if (c?.expires_in === undefined || c?.expires_in === null) return ''
+  const mins = Math.max(0, Math.floor((c.expires_in || 0) / 60))
+  return `有效期：约 ${mins} 分钟`
+})
+
+const refreshBinding = async () => {
+  try {
+    bindingLoading.value = true
+    const data = await getWechatBinding()
+    wechatBinding.value = data
+  } catch (e: any) {
+    Message.error(e || '获取绑定状态失败')
+  } finally {
+    bindingLoading.value = false
+  }
+}
+
+const generateBindCode = async (force = false) => {
+  try {
+    codeLoading.value = true
+    const code: WechatBindCode = await createWechatBindCode(force)
+    wechatBinding.value = {
+      ...(wechatBinding.value as any),
+      bind_code: code,
+    }
+  } catch (e: any) {
+    Message.error(e || '生成绑定码失败')
+  } finally {
+    codeLoading.value = false
+  }
+}
+
+const copyBindCode = async () => {
+  const code = bindCodeText.value
+  if (!code || code === '-') return
+  try {
+    await navigator.clipboard.writeText(code)
+    Message.success('已复制绑定码')
+  } catch {
+    try {
+      const el = document.createElement('textarea')
+      el.value = code
+      el.style.position = 'fixed'
+      el.style.left = '-9999px'
+      document.body.appendChild(el)
+      el.focus()
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      Message.success('已复制绑定码')
+    } catch {
+      Message.error('复制失败，请手动复制')
+    }
+  }
+}
+
 const showPromoModal = (e?: Event) => {
   if (e) e.preventDefault()
   promoQrError.value = false
   promoVisible.value = true
+  refreshBinding().then(() => {
+    if (!wechatBinding.value?.is_bound && !wechatBinding.value?.bind_code?.code) generateBindCode(false)
+  })
 }
 
 const dismissPromo = () => {
@@ -216,27 +349,27 @@ const handleLogout = async () => {
   }
 }
 
-onMounted(() => {
-  if (isAuthenticated.value) fetchUserInfo()
-  initBrowserNotification()
-  translatePage()
-  fetchSysInfo()
+	onMounted(() => {
+	  if (isAuthenticated.value) fetchUserInfo()
+	  initBrowserNotification()
+	  translatePage()
+	  fetchSysInfo()
 
-  if (isAuthenticated.value && !localStorage.getItem(PROMO_SEEN_KEY)) {
-    promoVisible.value = true
-  }
-})
+	  if (isAuthenticated.value && !localStorage.getItem(PROMO_SEEN_KEY)) {
+	    showPromoModal()
+	  }
+	})
 
 watch(
   () => route.path,
   () => {
     hasLogined.value = !!localStorage.getItem('token')
-    if (hasLogined.value) {
-      fetchUserInfo()
-      if (!localStorage.getItem(PROMO_SEEN_KEY)) promoVisible.value = true
-    }
-  }
-)
+	    if (hasLogined.value) {
+	      fetchUserInfo()
+	      if (!localStorage.getItem(PROMO_SEEN_KEY)) showPromoModal()
+	    }
+	  }
+	)
 </script>
 
 <style scoped>

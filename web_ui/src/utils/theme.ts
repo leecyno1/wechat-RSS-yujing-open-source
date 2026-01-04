@@ -12,10 +12,30 @@ const setArcoThemeAttr = (isDark: boolean) => {
 }
 
 const setColorScheme = (isDark: boolean) => {
+  const scheme = isDark ? 'dark' : 'light'
   try {
-    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+    document.documentElement.style.colorScheme = scheme
   } catch {
     // ignore
+  }
+
+  const applyBody = () => {
+    try {
+      document.body.style.colorScheme = scheme
+    } catch {
+      // ignore
+    }
+  }
+
+  if (document.body) applyBody()
+  else {
+    let tries = 0
+    const tick = () => {
+      tries += 1
+      if (document.body) return applyBody()
+      if (tries < 60) setTimeout(tick, 16)
+    }
+    tick()
   }
 }
 

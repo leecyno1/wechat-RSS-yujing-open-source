@@ -125,6 +125,12 @@ def start_all_task():
         start_auto_update()
     except Exception as e:
         print_error(f"启动自动全量更新失败: {e}")
+    try:
+        from jobs.digest import start_digest_outbox
+
+        start_digest_outbox()
+    except Exception as e:
+        print_error(f"启动合集推送 outbox 失败: {e}")
 if __name__ == '__main__':
     # do_job()
     # start_all_task()

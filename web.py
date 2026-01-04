@@ -26,6 +26,9 @@ from apis.library import router as library_router
 from apis.public import router as public_router
 from apis.channels import router as channels_router
 from apis.service_api import router as service_router
+from apis.digest import router as digest_router
+from apis.binding import router as binding_router
+from apis.wechat_official import router as wechat_official_router
 import apis
 import os
 from core.config import cfg,VERSION,API_BASE
@@ -86,6 +89,9 @@ api_router.include_router(library_router)
 api_router.include_router(public_router)
 api_router.include_router(channels_router)
 api_router.include_router(service_router)
+api_router.include_router(digest_router)
+api_router.include_router(binding_router)
+api_router.include_router(wechat_official_router)
 
 resource_router = APIRouter(prefix="/static")
 resource_router.include_router(res_router)

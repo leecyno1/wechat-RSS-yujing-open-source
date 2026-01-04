@@ -7,7 +7,9 @@ RUN yarn build
 
 FROM  --platform=$BUILDPLATFORM ghcr.io/rachelos/base-full:latest AS werss-base
 
+# Use a fast mirror by default, but keep a fallback for packages not mirrored yet.
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_EXTRA_INDEX_URL=https://pypi.org/simple
 
 WORKDIR /app
 RUN echo "1.0.$(date +%Y%m%d.%H%M)">>docker_version.txt

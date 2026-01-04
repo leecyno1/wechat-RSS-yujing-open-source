@@ -65,7 +65,23 @@
               />
             </a-select>
             <a-button type="primary" :loading="loading" @click="handleSubmit">添加订阅</a-button>
+            <a-button type="outline" @click="startWechatAuth">扫码授权</a-button>
           </div>
+
+          <a-alert
+            v-if="needWechatAuth"
+            type="warning"
+            show-icon
+            style="margin-top: 12px"
+            title="搜索公众号需要先扫码授权"
+          >
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+              <span style="color: var(--color-text-2);">
+                未获取到公众号平台会话（token/cookie），请先完成「扫码授权」后再搜索/添加。
+              </span>
+              <a-button size="small" type="primary" @click="startWechatAuth">立即扫码授权</a-button>
+            </div>
+          </a-alert>
 
           <div class="meta-preview" v-if="form.wx_id">
             <a-avatar :size="40" :src="avatar_url"><img :src="avatar_url" width="40" /></a-avatar>
@@ -85,6 +101,7 @@
         </a-tab-pane>
       </a-tabs>
     </a-card>
+    <WechatAuthQrcode ref="qrcodeRef" @success="onWechatAuthSuccess" />
   </div>
 </template>
 
@@ -94,6 +111,7 @@ import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { addSubscription, getPlaza, getSubscriptions, searchBiz, getSubscriptionInfo } from '@/api/subscription'
 import {Avatar} from '@/utils/constants'
+import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
 const router = useRouter()
 const loading = ref(false)
 const isFetching = ref(false)
@@ -106,6 +124,27 @@ const form = ref({
   avatar:'',
   description: ''
 })
+
+const qrcodeRef = ref<any>(null)
+const needWechatAuth = ref(false)
+const lastSearchKw = ref('')
+
+const startWechatAuth = () => {
+  qrcodeRef.value?.startAuth?.()
+}
+
+const onWechatAuthSuccess = async () => {
+  needWechatAuth.value = false
+  if (lastSearchKw.value) {
+    await handleSearch(lastSearchKw.value)
+  }
+}
+
+const _extractErrMsg = (e: any): string => {
+  if (!e) return ''
+  if (typeof e === 'string') return e
+  return String(e?.detail?.message || e?.message || e?.detail || '')
+}
 
 // 监听 form.avatar 的变化
 watch(() => form.value.avatar, (newValue, oldValue) => {
@@ -143,14 +182,17 @@ const handleSearch = async (value: string) => {
     searchResults.value = []
     return
   }
+  lastSearchKw.value = value
   try {
     const res = await searchBiz(value, {
       page: 0,
       pageSize: 10
     })
     searchResults.value = res.list || []
+    needWechatAuth.value = false
   } catch (error) {
-    // Message.error('搜索公众号失败')
+    const msg = _extractErrMsg(error)
+    needWechatAuth.value = msg.includes('扫码授权') || msg.includes('授权')
     searchResults.value = []
   }
 }
@@ -310,7 +352,12 @@ const subscribeFromPlaza = async (it: PlazaItem) => {
     Message.success(`已订阅：${picked.nickname}`)
     await loadSubscribed()
   } catch (e: any) {
-    Message.error(e?.message || '订阅失败')
+    const msg = _extractErrMsg(e)
+    if (msg.includes('扫码授权') || msg.includes('授权')) {
+      needWechatAuth.value = true
+      startWechatAuth()
+    }
+    Message.error(msg || '订阅失败')
   } finally {
     addingMap.value[key] = false
   }

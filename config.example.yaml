@@ -86,6 +86,29 @@ promo:
   # 默认使用内置图片；也可覆盖为 data 目录（已挂载持久化卷）如：data/promo_qr.png
   qr_file: ${PROMO_QR_FILE:-static/promo/lemon_doctor_qr.jpg}
 
+# 公众号服务端（柠檬博士）：自定义菜单/回调/客服消息（用于“订阅推送”）
+wechat_official:
+  appid: ${WECHAT_OFFICIAL_APPID:-}
+  appsecret: ${WECHAT_OFFICIAL_APPSECRET:-}
+  # 回调校验 Token（公众号后台配置）
+  token: ${WECHAT_OFFICIAL_TOKEN:-}
+  # 消息加解密密钥 EncodingAESKey（安全模式/兼容模式需要）
+  encoding_aes_key: ${WECHAT_OFFICIAL_ENCODING_AES_KEY:-}
+  # 是否使用 stable_token 获取 access_token（推荐 True）
+  use_stable_token: ${WECHAT_OFFICIAL_USE_STABLE_TOKEN:-True}
+  # HTTP 请求超时(秒)
+  http_timeout: ${WECHAT_OFFICIAL_HTTP_TIMEOUT:-10}
+  menu:
+    # “订阅推送”按钮点击事件的 EventKey
+    digest_key: ${WECHAT_OFFICIAL_MENU_DIGEST_KEY:-DIGEST_TODAY}
+
+# 公众号关注绑定（站内生成绑定码 → 用户发给公众号 → 机器人回调绑定）
+binding:
+  code_prefix: ${BINDING_CODE_PREFIX:-LM}
+  code_len: ${BINDING_CODE_LEN:-8}
+  # 绑定码有效期（分钟）
+  code_ttl_minutes: ${BINDING_CODE_TTL_MINUTES:-60}
+
 cache:
   #缓存目录，默认为./data/cache
   dir: ${CACHE.DIR:-./data/cache}
@@ -112,7 +135,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:
@@ -172,3 +195,29 @@ auto_update:
   cron_evening: ${AUTO_UPDATE_CRON_EVENING:-0 21 * * *}
   # 每次更新每个公众号抓取页数（越大越慢）
   max_page: ${AUTO_UPDATE_MAX_PAGE:-1}
+
+# 合集/推送（生成待发送 outbox，机器人拉取后推送；推送实现由机器人负责）
+digest:
+  enable: ${DIGEST_ENABLE:-False}
+  # 定时生成 outbox 的 cron（建议略晚于 auto_update，给采集/洞察留出时间）
+  cron_morning: ${DIGEST_CRON_MORNING:-10 6 * * *}
+  cron_afternoon: ${DIGEST_CRON_AFTERNOON:-10 15 * * *}
+  cron_evening: ${DIGEST_CRON_EVENING:-10 21 * * *}
+  # 只为已绑定公众号身份的用户生成消息
+  only_bound: ${DIGEST_ONLY_BOUND:-True}
+  # outbox 通道标识（机器人可按通道拉取）
+  outbox_channel: ${DIGEST_OUTBOX_CHANNEL:-wechat}
+  # TopN 按点赞/阅读排序
+  top_n: ${DIGEST_TOP_N:-5}
+  # 摘要最多列出多少条（其余建议引导去合集页）
+  max_summary_items: ${DIGEST_MAX_SUMMARY_ITEMS:-20}
+  # 每条摘要最大长度
+  summary_max_len: ${DIGEST_SUMMARY_MAX_LEN:-80}
+  # 单条消息最大字符数（超出截断）
+  max_chars: ${DIGEST_MAX_CHARS:-1800}
+  # 合集页 URL Base（用于拼出 /#/digest?... 链接，可留空）
+  url_base: ${DIGEST_URL_BASE:-}
+  # 三段窗口边界小时（用于 morning/afternoon/evening 的统计窗口）
+  slot_morning_hour: ${DIGEST_SLOT_MORNING_HOUR:-6}
+  slot_afternoon_hour: ${DIGEST_SLOT_AFTERNOON_HOUR:-15}
+  slot_evening_hour: ${DIGEST_SLOT_EVENING_HOUR:-21}

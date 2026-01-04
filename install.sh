@@ -78,12 +78,24 @@ if [ -f "requirements.txt" ]; then
     CURRENT_MD5=$(md5sum requirements.txt | cut -d' ' -f1)
     OLD_MD5_FILE="$plant/requirements.txt.md5"
     
+    NEED_INSTALL=True
     if [ -f "$OLD_MD5_FILE" ] && [ "$CURRENT_MD5" = "$(cat $OLD_MD5_FILE)" ]; then
-        echo "requirements.txt未更新，跳过安装"
+        NEED_INSTALL=False
+    fi
+
+    # Even if md5 matches, verify a critical dependency exists; otherwise force reinstall.
+    python3 -c "import uvicorn" >/dev/null 2>&1 || NEED_INSTALL=True
+
+    if [ "$NEED_INSTALL" = False ]; then
+        echo "requirements.txt未更新且依赖完整，跳过安装"
     else
         echo "安装requirements.txt依赖..."
-        pip3 install -r requirements.txt
-        echo $CURRENT_MD5 > $OLD_MD5_FILE
+        if pip3 install -r requirements.txt; then
+            echo $CURRENT_MD5 > $OLD_MD5_FILE
+        else
+            echo "requirements.txt依赖安装失败"
+            exit 1
+        fi
     fi
 fi 
 
