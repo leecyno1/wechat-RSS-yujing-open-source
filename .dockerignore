@@ -8,3 +8,4 @@ fonts/
 .github/
 _pycache_/
 db.db
+config.yaml
