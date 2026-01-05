@@ -456,10 +456,29 @@ watch(
 .header-actions :deep(.arco-select-view) {
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-bg-2) 86%, transparent);
+  color: var(--color-text-1);
+}
+
+.header-actions :deep(.arco-select-view-input),
+.header-actions :deep(.arco-select-view-value) {
+  color: var(--color-text-1);
+}
+
+.header-actions :deep(.arco-select-view-placeholder) {
+  color: var(--color-text-3);
+}
+
+.header-actions :deep(.arco-select-view-icon) {
+  color: var(--color-text-2);
 }
 
 .promo-btn :deep(.arco-btn) {
   border-radius: 999px;
+  color: var(--lemon-accent, var(--color-warning-6));
+}
+
+.promo-btn :deep(.arco-btn:hover) {
+  background: color-mix(in srgb, var(--lemon-accent, var(--color-warning-6)) 14%, transparent);
 }
 
 .user-pill {

@@ -707,6 +707,7 @@ const handleRegister = async () => {
   background: var(--color-primary-5) !important;
 }
 
+:deep(.arco-btn-primary .arco-btn-content),
 :deep(.arco-btn-primary .arco-btn-text) {
   color: var(--color-white, #fff) !important;
 }

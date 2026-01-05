@@ -25,3 +25,4 @@ test.yaml
 compose/.env
 compose/.env.*
 environment.sh
+.DS_Store

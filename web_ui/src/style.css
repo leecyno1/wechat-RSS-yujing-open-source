@@ -42,6 +42,8 @@ a:hover {
   --success-color: var(--color-success-6, #00b42a);
   --warning-color: var(--color-warning-6, #ff7d00);
   --danger-color: var(--color-danger-6, #f53f3f);
+  /* Brand accent (Dr.Lemon) */
+  --lemon-accent: #ff9f0a;
   --app-header-height: 56px;
   --app-radius-sm: 12px;
   --app-radius-md: 14px;
@@ -261,6 +263,17 @@ body[arco-theme='dark'] {
 .arco-select-view,
 .arco-textarea-wrapper {
   border-radius: var(--app-radius-sm);
+}
+
+/* Apple-like: tinted outline buttons (default status only) */
+.arco-btn.arco-btn-outline:not(.arco-btn-disabled):not(.arco-btn-status-danger):not(.arco-btn-status-success):not(.arco-btn-status-warning) {
+  color: var(--color-primary-6);
+  border-color: color-mix(in srgb, var(--color-primary-6) 55%, var(--color-border));
+}
+
+.arco-btn.arco-btn-outline:not(.arco-btn-disabled):not(.arco-btn-status-danger):not(.arco-btn-status-success):not(.arco-btn-status-warning):hover {
+  background: color-mix(in srgb, var(--color-primary-6) 10%, transparent);
+  border-color: var(--color-primary-6);
 }
 
 /* 淡入动画 */

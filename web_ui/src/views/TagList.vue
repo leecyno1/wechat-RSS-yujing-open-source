@@ -46,7 +46,7 @@ const fetchTags = async (isLoadMore = false) => {
     }
     pagination.value.total = res.total || 0
   } catch (error) {
-    Message.error('获取标签列表失败')
+    Message.error('获取专题列表失败')
   } finally {
     if (isLoadMore) {
       loadingMore.value = false
@@ -78,7 +78,7 @@ const exportTags = async () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = '标签列表.csv'; // 指定下载文件名
+    a.download = '专题列表.csv'; // 指定下载文件名
     document.body.appendChild(a);
     a.click();
 
@@ -86,8 +86,8 @@ const exportTags = async () => {
     document.body.removeChild(a);
     Message.success('文件导出成功！');
   } catch (error: any) {
-    console.error('导出标签失败:', error);
-    const errorMessage = error?.message || '导出标签失败，请检查网络或联系管理员';
+    console.error('导出专题失败:', error);
+    const errorMessage = error?.message || '导出专题失败，请检查网络或联系管理员';
     Message.error(errorMessage);
   }
 };
@@ -116,7 +116,7 @@ const importTags = async () => {
         const detail = importError.response?.data?.detail;
         const errorMessage = (typeof detail === 'object' && detail.message) ? detail.message : (detail || '导入失败，请检查文件格式或联系管理员');
         Message.error(errorMessage);
-        console.error('导入标签时发生错误:', importError);
+        console.error('导入专题时发生错误:', importError);
       }
     };
 
@@ -139,22 +139,22 @@ onMounted(() => {
 
 <template>
   <div class="tag-list">
-    <a-page-header title="标签管理" subtitle="管理文章标签">
+    <a-page-header title="专题管理" subtitle="管理专题（用于分组筛选公众号）">
       <template #extra>
         <a-space>
           <a-button @click="exportTags">
             <template #icon><icon-export /></template>
-            导出标签
+            导出专题
           </a-button>
 
           <a-button @click="importTags">
             <template #icon><icon-import /></template>
-            导入标签
+            导入专题
           </a-button>
 
           <a-button type="primary" @click="$router.push('/tags/add')">
           <template #icon><icon-plus /></template>
-            添加标签
+            添加专题
           </a-button>
         </a-space>
       </template>
@@ -169,7 +169,7 @@ onMounted(() => {
         @page-change="handlePageChange"
       >
         <template #columns>
-          <a-table-column title="标签名称" data-index="name" />
+          <a-table-column title="专题名称" data-index="name" />
           <a-table-column title="状态" data-index="status">
             <template #cell="{ record }">
               <a-tag v-if="record.status === 1" color="green">启用</a-tag>
@@ -186,7 +186,7 @@ onMounted(() => {
                 <a-button type="text" @click="$router.push(`/tags/edit/${record.id}`)">
                   编辑
                 </a-button>
-                <a-popconfirm content="确认删除该标签？" @ok="handleDelete(record.id)">
+                <a-popconfirm content="确认删除该专题？" @ok="handleDelete(record.id)">
                   <a-button type="text" status="danger">删除</a-button>
                 </a-popconfirm>
               </a-space>
@@ -219,7 +219,7 @@ onMounted(() => {
               <a-button type="text" size="small" @click="$router.push(`/tags/edit/${item.id}`)">
                 编辑
               </a-button>
-              <a-popconfirm content="确认删除该标签？" @ok="handleDelete(item.id)">
+              <a-popconfirm content="确认删除该专题？" @ok="handleDelete(item.id)">
                 <a-button type="text" status="danger" size="small">删除</a-button>
               </a-popconfirm>
             </a-space>
