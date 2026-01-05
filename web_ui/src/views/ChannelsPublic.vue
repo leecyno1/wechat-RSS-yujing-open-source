@@ -9,26 +9,28 @@
               全部已读
             </a-button>
           </div>
-          <div class="sider-tabs">
-            <a-button
-              class="tab-btn"
-              :type="leftTab === 'feeds' ? 'primary' : 'outline'"
-              size="mini"
-              long
-              @click="showAllFeeds"
-            >
-              全部订阅
-              <a-badge v-if="feedsStats.unread_total" :count="feedsStats.unread_total" :max-count="99" />
-            </a-button>
-            <a-button
-              class="tab-btn"
-              :type="leftTab === 'topics' ? 'primary' : 'outline'"
-              size="mini"
-              long
-              @click="leftTab = 'topics'"
-            >
-              我的专题
-              <a-badge :count="topics.length" :max-count="99" />
+	          <div class="sider-tabs">
+	            <a-button
+	              class="tab-btn"
+	              :type="leftTab === 'feeds' ? 'primary' : 'outline'"
+	              :status="leftTab === 'feeds' ? 'warning' : undefined"
+	              size="mini"
+	              long
+	              @click="showAllFeeds"
+	            >
+	              全部订阅
+	              <a-badge v-if="feedsStats.unread_total" :count="feedsStats.unread_total" :max-count="99" />
+	            </a-button>
+	            <a-button
+	              class="tab-btn"
+	              :type="leftTab === 'topics' ? 'primary' : 'outline'"
+	              :status="leftTab === 'topics' ? 'warning' : undefined"
+	              size="mini"
+	              long
+	              @click="leftTab = 'topics'"
+	            >
+	              我的专题
+	              <a-badge :count="topics.length" :max-count="99" />
             </a-button>
           </div>
 
@@ -108,9 +110,9 @@
           </div>
           <div class="toolbar-right">
             <a-tag v-if="activeChannelName" color="blue">{{ activeChannelName }}</a-tag>
-            <a-button v-if="hasToken" size="small" type="primary" :loading="refreshAllLoading" @click="refreshAllSubscriptions">
-              一键刷新
-            </a-button>
+	            <a-button v-if="hasToken" size="small" type="primary" status="warning" :loading="refreshAllLoading" @click="refreshAllSubscriptions">
+	              一键刷新
+	            </a-button>
             <a-button v-if="activeChannelId && activeChannelId !== 'all'" size="small" type="outline" @click="copyShareLink">
               复制分享链接
             </a-button>
@@ -272,20 +274,22 @@ import { UpdateMps } from '@/api/subscription'
 import { listTags } from '@/api/tagManagement'
 
 const route = useRoute()
-const router = useRouter()
-
-const channelsLoading = ref(false)
-const channels = ref<ChannelFeedItem[]>([])
-const channelKw = ref('')
-const activeChannelId = ref<string>('')
-const activeChannelName = ref<string>('')
-
-const articlesLoading = ref(false)
-const articles = ref<any[]>([])
-const articleKw = ref('')
-const activeArticleId = ref<string>('')
-const activeArticleTitle = ref<string>('')
-const activeArticleDesc = ref<string>('')
+	const router = useRouter()
+	
+	const channelsLoading = ref(false)
+	const channelsRefreshing = ref(false)
+	const channels = ref<ChannelFeedItem[]>([])
+	const channelKw = ref('')
+	const activeChannelId = ref<string>('')
+	const activeChannelName = ref<string>('')
+	
+	const articlesLoading = ref(false)
+	const articlesRefreshing = ref(false)
+	const articles = ref<any[]>([])
+	const articleKw = ref('')
+	const activeArticleId = ref<string>('')
+	const activeArticleTitle = ref<string>('')
+	const activeArticleDesc = ref<string>('')
 
 const insightLoading = ref(false)
 const insight = ref<PublicInsights | null>(null)
@@ -426,18 +430,20 @@ const showAllFeeds = async () => {
 	  }
 	}
 
-const loadFeeds = async () => {
-  channelsLoading.value = true
-  try {
-	    if (hasToken.value) {
-	      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
-	      channels.value = res.list || []
-	      feedsStats.value = res.stats || feedsStats.value
-	    } else {
-	      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
-	      channels.value = (res.list || []).map((c: any) => ({ ...c, unread_count: 0, article_count: 0, latest_publish_time: 0 }))
-	      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
-	    }
+	const loadFeeds = async (opts?: { background?: boolean }) => {
+	  const background = !!opts?.background
+	  if (background) channelsRefreshing.value = true
+	  else channelsLoading.value = true
+	  try {
+		    if (hasToken.value) {
+		      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
+		      channels.value = res.list || []
+		      feedsStats.value = res.stats || feedsStats.value
+		    } else {
+		      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
+		      channels.value = (res.list || []).map((c: any) => ({ ...c, unread_count: 0, article_count: 0, latest_publish_time: 0 }))
+		      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
+		    }
 
     if (!activeChannelId.value) {
       const q = (route.query.channel_id as string) || ''
@@ -447,12 +453,13 @@ const loadFeeds = async () => {
         selectChannel(channels.value[0].id, true)
       }
     }
-  } catch (e: any) {
-    Message.error(e?.message || '加载频道失败')
-  } finally {
-    channelsLoading.value = false
-  }
-}
+	  } catch (e: any) {
+	    if (!background) Message.error(e?.message || '加载频道失败')
+	  } finally {
+	    channelsLoading.value = false
+	    channelsRefreshing.value = false
+	  }
+	}
 
 const maybeAutoUpdateChannel = async (mpId: string) => {
   if (!hasToken.value) return
@@ -474,14 +481,14 @@ const maybeAutoUpdateChannel = async (mpId: string) => {
   }
 
   // The backend updates in a background thread; poll list a few times to reflect fresh rows.
-  for (const delay of [2000, 6000, 12000]) {
-    setTimeout(() => {
-      if (activeChannelId.value === id) {
-        loadFeeds()
-        loadArticles()
-      }
-    }, delay)
-  }
+	for (const delay of [2000, 6000, 12000]) {
+	  setTimeout(() => {
+	    if (activeChannelId.value === id) {
+	      loadFeeds({ background: true })
+	      loadArticles({ background: true })
+	    }
+	  }, delay)
+	}
 }
 
 const refreshAllSubscriptions = async () => {
@@ -508,17 +515,19 @@ const refreshAllSubscriptions = async () => {
   }
 
   // Backend updates in background; poll a few times to reflect fresh rows.
-  for (const delay of [2000, 6000, 12000]) {
-    setTimeout(() => {
-      loadFeeds()
-      if (activeChannelId.value) loadArticles()
-    }, delay)
-  }
+	for (const delay of [2000, 6000, 12000]) {
+	  setTimeout(() => {
+	    loadFeeds({ background: true })
+	    if (activeChannelId.value) loadArticles({ background: true })
+	  }, delay)
+	}
 }
 
-const loadArticles = async () => {
+const loadArticles = async (opts?: { background?: boolean }) => {
   if (!activeChannelId.value) return
-  articlesLoading.value = true
+  const background = !!opts?.background
+  if (background) articlesRefreshing.value = true
+  else articlesLoading.value = true
   try {
     if (hasToken.value) {
       const res: any = await getChannelArticles({
@@ -544,9 +553,10 @@ const loadArticles = async () => {
       selectArticle(articles.value[0])
     }
   } catch (e: any) {
-    Message.error(e?.message || '加载文章失败')
+    if (!background) Message.error(e?.message || '加载文章失败')
   } finally {
     articlesLoading.value = false
+    articlesRefreshing.value = false
   }
 }
 
@@ -624,13 +634,13 @@ const selectArticle = async (article: any) => {
         .then(() => loadInsight(articleId))
         .catch(() => {})
     }
-    try {
-      await setArticleRead(articleId, true)
-      article.is_read = 1
-      loadFeeds()
-    } catch {
-      // ignore
-    }
+	    try {
+	      await setArticleRead(articleId, true)
+	      article.is_read = 1
+	      loadFeeds({ background: true })
+	    } catch {
+	      // ignore
+	    }
     // If digest missing, backfill via backend list API to populate "精华速览"
     if (!activeArticleDesc.value) {
       try {
@@ -769,15 +779,15 @@ onMounted(async () => {
     if (t) await selectTopic(t, true)
   }
 
-  if (pollTimer) clearInterval(pollTimer)
-  pollTimer = setInterval(() => {
-    if (document.hidden) return
-    if (channelsLoading.value || articlesLoading.value) return
-    if (!activeChannelId.value) return
-    loadFeeds()
-    loadArticles()
-  }, AUTO_POLL_MS)
-})
+	  if (pollTimer) clearInterval(pollTimer)
+	  pollTimer = setInterval(() => {
+	    if (document.hidden) return
+	    if (channelsLoading.value || channelsRefreshing.value || articlesLoading.value || articlesRefreshing.value) return
+	    if (!activeChannelId.value) return
+	    loadFeeds({ background: true })
+	    loadArticles({ background: true })
+	  }, AUTO_POLL_MS)
+	})
 
 onUnmounted(() => {
   if (pollTimer) {

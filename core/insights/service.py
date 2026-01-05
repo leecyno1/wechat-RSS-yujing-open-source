@@ -122,7 +122,7 @@ class InsightsService:
             return
 
         # Key points: can be generated from digest/summary even without content.
-        if bool(cfg.get("insights.auto_key_points", False)):
+        if bool(cfg.get("insights.auto_key_points", True)):
             try:
                 _run_coro(self.generate_key_points(article_id))
             except Exception:

@@ -178,7 +178,12 @@ class Db:
             # 洞察自动入库：异步执行，避免阻塞采集流程
             if changed:
                 try:
-                    if cfg.get("insights.auto_basic", True) or cfg.get("insights.auto_key_points", False) or cfg.get("insights.auto_llm_breakdown", False):
+                    if (
+                        cfg.get("insights.auto_basic", True)
+                        or cfg.get("insights.auto_fetch_content", False)
+                        or cfg.get("insights.auto_key_points", True)
+                        or cfg.get("insights.auto_llm_breakdown", False)
+                    ):
                         from core.queue import TaskQueue
                         from core.insights import InsightsService
                         TaskQueue.add_task(InsightsService().ensure_cached, art.id)

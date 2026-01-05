@@ -135,7 +135,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,langbot.webhook_token}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:
@@ -159,6 +159,12 @@ export:
 insights:
   # 是否在文章入库后自动生成基础洞察(摘要/一级二级标题)
   auto_basic: ${INSIGHTS_AUTO_BASIC:-True}
+  # 是否自动抓取正文(用于全文拆解/更好的摘要；需要采集能力支持)
+  auto_fetch_content: ${INSIGHTS_AUTO_FETCH_CONTENT:-False}
+  # 是否自动生成关键信息点(3-8条+高亮；无LLM时会落地可复现的 fallback)
+  auto_key_points: ${INSIGHTS_AUTO_KEY_POINTS:-True}
+  # 是否自动生成全文拆解(需要 LLM + 正文)
+  auto_llm_breakdown: ${INSIGHTS_AUTO_LLM_BREAKDOWN:-False}
   # 摘要最大长度(字符)
   summary_max_len: ${INSIGHTS_SUMMARY_MAX_LEN:-200}
   # 关键信息(一级/二级标题)最大条数
@@ -185,6 +191,10 @@ llm:
 service:
   # 逗号分隔；通过请求头 X-API-Key 访问 /api/v1/wx/service/*
   api_keys: ${SERVICE_API_KEYS:-}
+
+# LangBot 回调（用于把 “用户发给公众号的绑定码” 回写到本站 DB）
+langbot:
+  webhook_token: ${LANGBOT_WEBHOOK_TOKEN:-}
 
 # 自动全量更新（已添加订阅的所有公众号）
 auto_update:
