@@ -77,13 +77,13 @@ def _extract_bind_code(content: str) -> str:
     return raw[idx : idx + code_len]
 
 
-def _handle_text_bind(openid: str, content: str) -> None:
+def _consume_bind_code_reply(openid: str, content: str) -> str | None:
     openid_s = str(openid or "").strip()
     if not openid_s:
-        return
+        return None
     code = _extract_bind_code(content)
     if not code:
-        return
+        return None
     masked_code = code[:2] + "***" if len(code) > 2 else "***"
     logger.info("WeChatOfficial: bind attempt openid=%s code=%s", openid_s, masked_code)
 
@@ -98,8 +98,7 @@ def _handle_text_bind(openid: str, content: str) -> None:
         )
         if not rec:
             logger.info("WeChatOfficial: bind failed (code not found) openid=%s code=%s", openid_s, masked_code)
-            _send_text(openid_s, "【Dr.Lemon订阅助手】绑定码不存在或已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。")
-            return
+            return "【Dr.Lemon订阅助手】绑定码不存在或已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         status_v = int(getattr(rec, "status", 0) or 0)
         exp = getattr(rec, "expires_at", None)
@@ -107,8 +106,7 @@ def _handle_text_bind(openid: str, content: str) -> None:
             used_openid = str(getattr(rec, "used_openid", "") or "")
             if used_openid and used_openid != openid_s:
                 logger.info("WeChatOfficial: bind failed (code used) openid=%s code=%s", openid_s, masked_code)
-                _send_text(openid_s, "【Dr.Lemon订阅助手】该绑定码已被使用。\n请回到网站重新生成绑定码后再发送。")
-                return
+                return "【Dr.Lemon订阅助手】该绑定码已被使用。\n请回到网站重新生成绑定码后再发送。"
             binding = (
                 session.query(UserWechatBinding)
                 .filter(UserWechatBinding.user_id == rec.user_id)
@@ -116,10 +114,9 @@ def _handle_text_bind(openid: str, content: str) -> None:
                 .first()
             )
             if binding:
-                _send_text(openid_s, "【Dr.Lemon订阅助手】你已绑定成功。\n点击菜单【订阅推送】可获取今日精选+摘要。")
+                return "【Dr.Lemon订阅助手】你已绑定成功。\n点击菜单【订阅推送】可获取今日精选+摘要。"
             else:
-                _send_text(openid_s, "【Dr.Lemon订阅助手】绑定码已使用，但绑定记录异常。\n请回到网站重新生成绑定码后再发送。")
-            return
+                return "【Dr.Lemon订阅助手】绑定码已使用，但绑定记录异常。\n请回到网站重新生成绑定码后再发送。"
 
         if exp and exp <= now:
             try:
@@ -130,20 +127,17 @@ def _handle_text_bind(openid: str, content: str) -> None:
             except Exception:
                 session.rollback()
             logger.info("WeChatOfficial: bind failed (code expired) openid=%s code=%s", openid_s, masked_code)
-            _send_text(openid_s, "【Dr.Lemon订阅助手】绑定码已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。")
-            return
+            return "【Dr.Lemon订阅助手】绑定码已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         if status_v == 9:
             logger.info("WeChatOfficial: bind failed (code invalid) openid=%s code=%s", openid_s, masked_code)
-            _send_text(openid_s, "【Dr.Lemon订阅助手】绑定码已失效。\n请回到网站【信息-绑定】重新生成绑定码后再发送。")
-            return
+            return "【Dr.Lemon订阅助手】绑定码已失效。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         user_id = str(getattr(rec, "user_id", "") or "")
         user = session.query(DBUser).filter(DBUser.id == user_id).first()
         if not user:
             logger.info("WeChatOfficial: bind failed (user missing) openid=%s user_id=%s code=%s", openid_s, user_id, masked_code)
-            _send_text(openid_s, "【Dr.Lemon订阅助手】绑定失败：绑定码对应用户不存在。\n请回到网站重新生成绑定码后再发送。")
-            return
+            return "【Dr.Lemon订阅助手】绑定失败：绑定码对应用户不存在。\n请回到网站重新生成绑定码后再发送。"
 
         # Prevent one openid binding to multiple users.
         by_openid = (
@@ -154,8 +148,7 @@ def _handle_text_bind(openid: str, content: str) -> None:
         )
         if by_openid and str(by_openid.user_id) != user_id:
             logger.info("WeChatOfficial: bind failed (openid conflict) openid=%s user_id=%s", openid_s, user_id)
-            _send_text(openid_s, "【Dr.Lemon订阅助手】该微信已绑定到其它站内账号。\n如需更换账号，请先在站内解绑或联系管理员。")
-            return
+            return "【Dr.Lemon订阅助手】该微信已绑定到其它站内账号。\n如需更换账号，请先在站内解绑或联系管理员。"
 
         binding = session.query(UserWechatBinding).filter(UserWechatBinding.user_id == user_id).first()
         if binding:
@@ -198,12 +191,18 @@ def _handle_text_bind(openid: str, content: str) -> None:
 
         session.commit()
         logger.info("WeChatOfficial: bind success user_id=%s openid=%s", user_id, openid_s)
-        _send_text(openid_s, f"【Dr.Lemon订阅助手】绑定成功！\n你已绑定站内账号：{user.username}\n点击菜单【订阅推送】可获取今日精选+摘要。")
+        return f"【Dr.Lemon订阅助手】绑定成功！\n你已绑定站内账号：{user.username}\n点击菜单【订阅推送】可获取今日精选+摘要。"
     finally:
         try:
             session.close()
         except Exception:
             pass
+
+
+def _handle_text_bind(openid: str, content: str) -> None:
+    reply = _consume_bind_code_reply(openid, content)
+    if reply:
+        _send_text(str(openid or "").strip(), reply)
 
 
 def _handle_click_digest(openid: str) -> None:
@@ -340,6 +339,8 @@ async def wechat_official_callback(
         openid = str(msg.get("FromUserName") or "").strip()
         content = str(msg.get("Content") or "").strip()
         if openid and content:
-            background_tasks.add_task(_handle_text_bind, openid, content)
+            reply = _consume_bind_code_reply(openid, content)
+            if reply:
+                background_tasks.add_task(_send_text, openid, reply)
 
     return Response(content="success")
