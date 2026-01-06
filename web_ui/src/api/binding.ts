@@ -15,6 +15,12 @@ export type WechatBindingInfo = {
   bind_code?: WechatBindCode | null
 }
 
+export type WechatBindQrcodeInfo = {
+  bind_code?: WechatBindCode | null
+  qrcode_url?: string
+  expires_in?: number
+}
+
 export const getWechatBinding = async (): Promise<WechatBindingInfo> => {
   const data = await http.get('/wx/binding/wechat')
   return data
@@ -25,3 +31,7 @@ export const createWechatBindCode = async (force = false): Promise<WechatBindCod
   return data
 }
 
+export const getWechatBindQrcode = async (): Promise<WechatBindQrcodeInfo> => {
+  const data = await http.get('/wx/binding/wechat/qrcode')
+  return data
+}

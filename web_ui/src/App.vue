@@ -89,18 +89,58 @@
         unmount-on-close
         @close="dismissPromo"
       >
-        <div style="text-align: center;">
-          <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
-          <img
-            v-if="!promoQrError"
-            :src="promoQrSrc"
-            alt="柠檬博士公众号二维码"
-            style="max-width: 320px; margin-top: 16px; border-radius: 12px;"
-            @error="promoQrError = true"
-          />
-          <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
-            二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
-          </div>
+	        <div style="text-align: center;">
+	          <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
+	          <div style="margin-top: 16px;">
+	            <template v-if="wechatBinding.is_bound">
+	              <img
+	                v-if="!promoQrError"
+	                :src="promoQrSrc"
+	                alt="柠檬博士公众号二维码"
+	                style="max-width: 320px; border-radius: 12px;"
+	                @error="promoQrError = true"
+	              />
+	              <div v-else style="margin-top: 12px; color: var(--color-text-3); font-size: 12px;">
+	                二维码未配置：请设置 `PROMO_QR_URL` 或放置 `data/promo_qr.png`（容器内路径 `/app/data/promo_qr.png`）。
+	              </div>
+	            </template>
+	
+	            <template v-else>
+	              <a-spin :loading="bindQrcodeLoading">
+	                <div style="display: inline-block;">
+	                  <img
+	                    v-if="bindQrcodeUrl && !bindQrcodeImgError"
+	                    :src="bindQrcodeUrl"
+	                    alt="绑定二维码"
+	                    style="max-width: 320px; border-radius: 12px;"
+	                    @error="bindQrcodeImgError = true"
+	                  />
+	                  <div
+	                    v-else
+	                    style="
+	                      width: 320px;
+	                      height: 320px;
+	                      display: flex;
+	                      align-items: center;
+	                      justify-content: center;
+	                      border-radius: 12px;
+	                      border: 1px dashed var(--color-neutral-4);
+	                      color: var(--color-text-3);
+	                      font-size: 12px;
+	                    "
+	                  >
+	                    {{ bindQrcodeError ? '绑定二维码生成失败' : '正在生成绑定二维码…' }}
+	                  </div>
+	                </div>
+	              </a-spin>
+	              <div v-if="bindQrcodeError" style="margin-top: 10px; color: var(--color-text-3); font-size: 12px;">
+	                {{ bindQrcodeError }}（可先使用下方绑定码手动绑定）
+	              </div>
+	              <div v-else style="margin-top: 10px; color: var(--color-text-2); font-size: 13px;">
+	                扫码关注（或已关注直接扫码）即可自动绑定
+	              </div>
+	            </template>
+	          </div>
 
           <div style="max-width: 520px; margin: 18px auto 0; text-align: left;">
             <div v-if="bindingLoading" style="text-align: center; padding: 10px 0;">
@@ -112,10 +152,11 @@
                 已绑定（{{ wechatBinding.wechat_openid_masked || '已完成' }}），后续将按你的订阅发送每日精选与摘要。
               </a-alert>
 
-              <template v-else>
-                <a-alert type="info" show-icon>
-                  绑定步骤：关注公众号 → 把下方“绑定码”发给公众号 → 点击“刷新绑定状态”。
-                </a-alert>
+	              <template v-else>
+	                <a-alert type="info" show-icon>
+	                  绑定步骤：扫码上方二维码关注/扫码 → 自动绑定 → 点击“刷新绑定状态”确认。
+	                  如扫码失败，可把下方“绑定码”发给公众号完成绑定。
+	                </a-alert>
 
                 <div
                   style="
@@ -126,9 +167,9 @@
                     background: var(--color-bg-2);
                   "
                 >
-                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                    <div style="text-align: left;">
-                      <div style="font-size: 12px; color: var(--color-text-3);">绑定码</div>
+	                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+	                    <div style="text-align: left;">
+	                      <div style="font-size: 12px; color: var(--color-text-3);">绑定码（备用）</div>
                       <div
                         style="
                           font-size: 20px;
@@ -180,14 +221,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, provide, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
-import { getCurrentUser, logout } from '@/api/auth'
-import { getSysInfo } from '@/api/sysInfo'
-import { createWechatBindCode, getWechatBinding, type WechatBindCode, type WechatBindingInfo } from '@/api/binding'
-import Navbar from '@/components/Layout/Navbar.vue'
-import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
-import { initBrowserNotification } from '@/utils/browserNotification'
+	import { useRoute, useRouter } from 'vue-router'
+	import { Message } from '@arco-design/web-vue'
+	import { getCurrentUser, logout } from '@/api/auth'
+	import { getSysInfo } from '@/api/sysInfo'
+	import { createWechatBindCode, getWechatBindQrcode, getWechatBinding, type WechatBindCode, type WechatBindQrcodeInfo, type WechatBindingInfo } from '@/api/binding'
+	import Navbar from '@/components/Layout/Navbar.vue'
+	import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
+	import { initBrowserNotification } from '@/utils/browserNotification'
 import { translatePage, setCurrentLanguage } from '@/utils/translate'
 import { getThemeMode, setThemeMode, type ThemeMode } from '@/utils/theme'
 import lemonIcon from '@/assets/lemon.svg'
@@ -216,15 +257,21 @@ const promoVisible = ref(false)
 const promoQrSrc = computed(() => `/api/v1/wx/sys/promo/qr?v=1`)
 const promoQrError = ref(false)
 
-const bindingLoading = ref(false)
-const codeLoading = ref(false)
-const wechatBinding = ref<WechatBindingInfo>({
-  user_id: '',
-  is_bound: false,
-  wechat_openid_masked: '',
-  wechat_unionid_masked: '',
-  bind_code: null,
-})
+	const bindingLoading = ref(false)
+	const codeLoading = ref(false)
+	const wechatBinding = ref<WechatBindingInfo>({
+	  user_id: '',
+	  is_bound: false,
+	  wechat_openid_masked: '',
+	  wechat_unionid_masked: '',
+	  bind_code: null,
+	})
+
+	const bindQrcodeLoading = ref(false)
+	const bindQrcodeImgError = ref(false)
+	const bindQrcodeError = ref('')
+	const bindQrcode = ref<WechatBindQrcodeInfo>({})
+	const bindQrcodeUrl = computed(() => bindQrcode.value?.qrcode_url || '')
 
 const bindCodeText = computed(() => wechatBinding.value?.bind_code?.code || '-')
 const bindCodeExpiresText = computed(() => {
@@ -234,32 +281,54 @@ const bindCodeExpiresText = computed(() => {
   return `有效期：约 ${mins} 分钟`
 })
 
-const refreshBinding = async () => {
-  try {
-    bindingLoading.value = true
-    const data = await getWechatBinding()
-    wechatBinding.value = data
-  } catch (e: any) {
-    Message.error(e || '获取绑定状态失败')
-  } finally {
-    bindingLoading.value = false
-  }
-}
+	const refreshBinding = async () => {
+	  try {
+	    bindingLoading.value = true
+	    const data = await getWechatBinding()
+	    wechatBinding.value = data
+	  } catch (e: any) {
+	    Message.error(e || '获取绑定状态失败')
+	  } finally {
+	    bindingLoading.value = false
+	  }
+	}
 
-const generateBindCode = async (force = false) => {
-  try {
-    codeLoading.value = true
-    const code: WechatBindCode = await createWechatBindCode(force)
-    wechatBinding.value = {
-      ...(wechatBinding.value as any),
-      bind_code: code,
-    }
-  } catch (e: any) {
-    Message.error(e || '生成绑定码失败')
-  } finally {
-    codeLoading.value = false
-  }
-}
+	const refreshBindQrcode = async () => {
+	  if (wechatBinding.value?.is_bound) return
+	  bindQrcodeError.value = ''
+	  bindQrcodeImgError.value = false
+	  try {
+	    bindQrcodeLoading.value = true
+	    const data = await getWechatBindQrcode()
+	    bindQrcode.value = data || {}
+	    if ((data as any)?.bind_code?.code) {
+	      wechatBinding.value = { ...(wechatBinding.value as any), bind_code: (data as any).bind_code }
+	    }
+	  } catch (e: any) {
+	    bindQrcode.value = {}
+	    bindQrcodeError.value = e || '生成绑定二维码失败'
+	  } finally {
+	    bindQrcodeLoading.value = false
+	  }
+	}
+
+	const generateBindCode = async (force = false) => {
+	  try {
+	    codeLoading.value = true
+	    const code: WechatBindCode = await createWechatBindCode(force)
+	    wechatBinding.value = {
+	      ...(wechatBinding.value as any),
+	      bind_code: code,
+	    }
+	    if (!wechatBinding.value?.is_bound) {
+	      refreshBindQrcode()
+	    }
+	  } catch (e: any) {
+	    Message.error(e || '生成绑定码失败')
+	  } finally {
+	    codeLoading.value = false
+	  }
+	}
 
 const copyBindCode = async () => {
   const code = bindCodeText.value
@@ -285,14 +354,20 @@ const copyBindCode = async () => {
   }
 }
 
-const showPromoModal = (e?: Event) => {
-  if (e) e.preventDefault()
-  promoQrError.value = false
-  promoVisible.value = true
-  refreshBinding().then(() => {
-    if (!wechatBinding.value?.is_bound && !wechatBinding.value?.bind_code?.code) generateBindCode(false)
-  })
-}
+	const showPromoModal = (e?: Event) => {
+	  if (e) e.preventDefault()
+	  promoQrError.value = false
+	  bindQrcodeError.value = ''
+	  bindQrcodeImgError.value = false
+	  promoVisible.value = true
+	  refreshBinding().then(() => {
+	    if (!wechatBinding.value?.is_bound) {
+	      refreshBindQrcode().then(() => {
+	        if (!wechatBinding.value?.bind_code?.code) generateBindCode(false)
+	      })
+	    }
+	  })
+	}
 
 const dismissPromo = () => {
   promoVisible.value = false

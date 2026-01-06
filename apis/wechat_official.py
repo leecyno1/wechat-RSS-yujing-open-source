@@ -250,6 +250,31 @@ def _handle_click_digest(openid: str) -> None:
             pass
 
 
+def _set_binding_active(openid: str, *, is_active: bool) -> bool:
+    openid_s = str(openid or "").strip()
+    if not openid_s:
+        return False
+    session = DB.get_session()
+    now = datetime.now()
+    try:
+        binding = session.query(UserWechatBinding).filter(UserWechatBinding.wechat_openid == openid_s).first()
+        if not binding:
+            return False
+        binding.is_active = 1 if is_active else 0
+        binding.updated_at = now
+        session.add(binding)
+        session.commit()
+        return True
+    except Exception:
+        session.rollback()
+        return False
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
 @router.get("/callback", summary="公众号回调校验")
 async def wechat_official_verify(
     signature: str | None = Query(None),
@@ -330,11 +355,30 @@ async def wechat_official_callback(
     msg_type = str(msg.get("MsgType") or "").strip().lower()
     if msg_type == "event":
         event = str(msg.get("Event") or "").strip().upper()
+        openid = str(msg.get("FromUserName") or "").strip()
+        event_key = str(msg.get("EventKey") or "").strip()
         if event == "CLICK":
-            event_key = str(msg.get("EventKey") or "").strip()
             if event_key == _menu_digest_key():
-                openid = str(msg.get("FromUserName") or "").strip()
                 background_tasks.add_task(_handle_click_digest, openid)
+        elif event in ("SUBSCRIBE", "SCAN"):
+            # Parameterized QRCode: SUBSCRIBE has EventKey "qrscene_xxx", SCAN has "xxx".
+            # Use EventKey as content so _extract_bind_code can find the binding code.
+            if openid and event_key:
+                reply = _consume_bind_code_reply(openid, event_key)
+                if reply:
+                    background_tasks.add_task(_send_text, openid, reply)
+            else:
+                # If user re-subscribed but no scene, re-activate existing binding by openid.
+                if event == "SUBSCRIBE" and openid:
+                    if _set_binding_active(openid, is_active=True):
+                        background_tasks.add_task(
+                            _send_text,
+                            openid,
+                            "【Dr.Lemon订阅助手】欢迎回来！\n已恢复你的绑定状态。\n点击菜单【订阅推送】可获取今日精选+摘要。",
+                        )
+        elif event == "UNSUBSCRIBE":
+            if openid:
+                _set_binding_active(openid, is_active=False)
     elif msg_type == "text":
         openid = str(msg.get("FromUserName") or "").strip()
         content = str(msg.get("Content") or "").strip()

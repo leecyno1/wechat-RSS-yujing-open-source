@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
+from urllib.parse import quote
 
 from core.config import cfg
 
@@ -145,6 +146,37 @@ class WeChatOfficialClient:
             raise RuntimeError(f"WeChatOfficialClient: menu/create error {data.get('errcode')}: {data.get('errmsg')}")
         return data
 
+    def create_qrcode_ticket(self, *, scene_str: str, expire_seconds: int = 600) -> dict[str, Any]:
+        """Create a temporary parameterized QRCode ticket (QR_STR_SCENE).
+
+        `scene_str` should be <= 64 chars; `expire_seconds` max 30 days.
+        """
+        scene = str(scene_str or "").strip()
+        if not scene:
+            raise RuntimeError("WeChatOfficialClient: scene_str is required")
+        if len(scene) > 64:
+            raise RuntimeError("WeChatOfficialClient: scene_str too long (max 64)")
+        try:
+            exp = int(expire_seconds or 0)
+        except Exception:
+            exp = 600
+        exp = max(60, min(30 * 24 * 3600, exp))
+
+        access_token = self.get_access_token()
+        url = f"{self.base_url}/cgi-bin/qrcode/create"
+        payload = {"expire_seconds": exp, "action_name": "QR_STR_SCENE", "action_info": {"scene": {"scene_str": scene}}}
+        resp = requests.post(url, params={"access_token": access_token}, json=payload, timeout=self._timeout())
+        data = resp.json()
+        if int(data.get("errcode") or 0) != 0:
+            raise RuntimeError(f"WeChatOfficialClient: qrcode/create error {data.get('errcode')}: {data.get('errmsg')}")
+        return data
+
+    def show_qrcode_url(self, ticket: str) -> str:
+        t = str(ticket or "").strip()
+        if not t:
+            return ""
+        return f"https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket={quote(t, safe='')}"
+
     def send_custom_text(self, openid: str, content: str) -> dict[str, Any]:
         openid_s = str(openid or "").strip()
         if not openid_s:
@@ -161,4 +193,3 @@ class WeChatOfficialClient:
         if int(data.get("errcode") or 0) != 0:
             raise RuntimeError(f"WeChatOfficialClient: custom/send error {data.get('errcode')}: {data.get('errmsg')}")
         return data
-
