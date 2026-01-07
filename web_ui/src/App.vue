@@ -1,94 +1,95 @@
 <template>
-  <a-layout class="app-container">
-    <a-layout-header v-if="route.path !== '/login'" class="app-header">
-      <div class="header-inner">
-        <div class="brand">
-          <img class="brand-logo" :src="logo" alt="logo" />
-          <router-link class="brand-title" to="/channels">{{ appTitle }}</router-link>
-          <a-tooltip
-            v-if="hasLogined"
-            :content="!haswxLogined ? '未授权，请扫码登录' : '点我扫码授权'"
-            position="bottom"
-          >
-            <icon-scan
-              class="brand-scan"
-              @click="showAuthQrcode()"
-              :style="{ color: !haswxLogined ? 'var(--color-danger-6)' : 'var(--color-text-2)' }"
-            />
-          </a-tooltip>
+  <a-config-provider size="small">
+    <a-layout class="app-container">
+      <a-layout-header v-if="route.path !== '/login'" class="app-header">
+        <div class="header-inner">
+          <div class="brand">
+            <img class="brand-logo" :src="logo" alt="logo" />
+            <router-link class="brand-title" to="/channels">{{ appTitle }}</router-link>
+            <a-tooltip
+              v-if="hasLogined"
+              :content="!haswxLogined ? '未授权，请扫码登录' : '点我扫码授权'"
+              position="bottom"
+            >
+              <icon-scan
+                class="brand-scan"
+                @click="showAuthQrcode()"
+                :style="{ color: !haswxLogined ? 'var(--color-danger-6)' : 'var(--color-text-2)' }"
+              />
+            </a-tooltip>
+          </div>
+
+          <div class="header-nav">
+            <Navbar />
+          </div>
+
+          <div class="header-actions">
+            <a-select
+              v-model:value="themeMode"
+              class="theme-select"
+              size="small"
+              :trigger-props="{ autoFitPopupMinWidth: true }"
+              @change="handleThemeChange"
+            >
+              <a-option value="system">System</a-option>
+              <a-option value="light">Light</a-option>
+              <a-option value="dark">Dark</a-option>
+            </a-select>
+
+            <a-select
+              v-model:value="currentLanguage"
+              class="lang-select"
+              size="small"
+              :trigger-props="{ autoFitPopupMinWidth: true }"
+              @change="handleLanguageChange"
+            >
+              <a-option v-for="opt in languageOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </a-option>
+            </a-select>
+
+            <a-tooltip v-if="hasLogined" content="关注后每天自动推送AI摘要与精选文章" position="bottom">
+              <a-button class="promo-btn" type="text" @click="showPromoModal">关注柠檬博士</a-button>
+            </a-tooltip>
+
+            <a-dropdown v-if="hasLogined" position="br" trigger="click">
+              <div class="user-pill">
+                <a-avatar :size="28">
+                  <img v-if="userInfo.avatar" :src="userInfo.avatar" alt="avatar" />
+                  <icon-user v-else />
+                </a-avatar>
+                <span class="username">{{ userInfo.username }}</span>
+              </div>
+              <template #content>
+                <a-doption @click="goToEditUser">
+                  <template #icon><icon-user /></template>
+                  个人中心
+                </a-doption>
+                <a-doption @click="goToChangePassword">
+                  <template #icon><icon-lock /></template>
+                  修改密码
+                </a-doption>
+                <a-doption @click="showAuthQrcode">
+                  <template #icon><icon-scan /></template>
+                  扫码授权
+                </a-doption>
+                <a-doption @click="handleLogout">
+                  <template #icon><icon-user /></template>
+                  退出登录
+                </a-doption>
+              </template>
+            </a-dropdown>
+          </div>
         </div>
-
-        <div class="header-nav">
-          <Navbar />
-        </div>
-
-        <div class="header-actions">
-          <a-select
-            v-model:value="themeMode"
-            class="theme-select"
-            size="small"
-            :trigger-props="{ autoFitPopupMinWidth: true }"
-            @change="handleThemeChange"
-          >
-            <a-option value="system">System</a-option>
-            <a-option value="light">Light</a-option>
-            <a-option value="dark">Dark</a-option>
-          </a-select>
-
-          <a-select
-            v-model:value="currentLanguage"
-            class="lang-select"
-            size="small"
-            :trigger-props="{ autoFitPopupMinWidth: true }"
-            @change="handleLanguageChange"
-          >
-            <a-option v-for="opt in languageOptions" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
-            </a-option>
-          </a-select>
-
-          <a-tooltip v-if="hasLogined" content="关注后每天自动推送AI摘要与精选文章" position="bottom">
-            <a-button class="promo-btn" type="text" @click="showPromoModal">关注柠檬博士</a-button>
-          </a-tooltip>
-
-          <a-dropdown v-if="hasLogined" position="br" trigger="click">
-            <div class="user-pill">
-              <a-avatar :size="28">
-                <img v-if="userInfo.avatar" :src="userInfo.avatar" alt="avatar" />
-                <icon-user v-else />
-              </a-avatar>
-              <span class="username">{{ userInfo.username }}</span>
-            </div>
-            <template #content>
-              <a-doption @click="goToEditUser">
-                <template #icon><icon-user /></template>
-                个人中心
-              </a-doption>
-              <a-doption @click="goToChangePassword">
-                <template #icon><icon-lock /></template>
-                修改密码
-              </a-doption>
-              <a-doption @click="showAuthQrcode">
-                <template #icon><icon-scan /></template>
-                扫码授权
-              </a-doption>
-              <a-doption @click="handleLogout">
-                <template #icon><icon-user /></template>
-                退出登录
-              </a-doption>
-            </template>
-          </a-dropdown>
-        </div>
-      </div>
-      <WechatAuthQrcode ref="qrcodeRef" />
-      <a-modal
-        v-model:visible="promoVisible"
-        title="关注「柠檬博士」"
-        :footer="false"
-        :style="{ zIndex: 1000 }"
-        unmount-on-close
-        @close="dismissPromo"
-      >
+        <WechatAuthQrcode ref="qrcodeRef" />
+        <a-modal
+          v-model:visible="promoVisible"
+          title="关注「柠檬博士」"
+          :footer="false"
+          :style="{ zIndex: 1000 }"
+          unmount-on-close
+          @close="dismissPromo"
+        >
 	        <div style="text-align: center;">
 	          <p>关注柠檬博士公众号，每天自动向你发送你定制的AI摘要和精选文章</p>
 	          <div style="margin-top: 16px;">
@@ -217,6 +218,7 @@
       </a-layout>
     </a-layout>
   </a-layout>
+  </a-config-provider>
 </template>
 
 <script setup lang="ts">

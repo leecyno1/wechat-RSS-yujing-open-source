@@ -152,6 +152,19 @@ class WeChatOfficialClient:
             raise RuntimeError(f"WeChatOfficialClient: menu/create error {data.get('errcode')}: {data.get('errmsg')}")
         return data
 
+    def list_followers(self, *, next_openid: str = "") -> dict[str, Any]:
+        """List followers openids (requires Official Account permissions).
+
+        Returns: {total, count, data: {openid: [...]}, next_openid}
+        """
+        access_token = self.get_access_token()
+        url = f"{self.base_url}/cgi-bin/user/get"
+        resp = requests.get(url, params={"access_token": access_token, "next_openid": str(next_openid or "").strip()}, timeout=self._timeout())
+        data = resp.json()
+        if int(data.get("errcode") or 0) != 0:
+            raise RuntimeError(f"WeChatOfficialClient: user/get error {data.get('errcode')}: {data.get('errmsg')}")
+        return data
+
     def create_qrcode_ticket(self, *, scene_str: str, expire_seconds: int = 600) -> dict[str, Any]:
         """Create a temporary parameterized QRCode ticket (QR_STR_SCENE).
 

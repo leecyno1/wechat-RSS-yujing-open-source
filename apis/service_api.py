@@ -59,6 +59,15 @@ def _estimate_word_count(text: str) -> int:
     return len(t)
 
 
+def _mask_openid(v: str) -> str:
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    if len(s) <= 10:
+        return s[:2] + "***"
+    return s[:4] + "***" + s[-4:]
+
+
 def _serialize_feed(feed: Feed) -> dict:
     return {
         "id": str(feed.id),
@@ -512,3 +521,114 @@ async def service_setup_wechat_official_menu(
             status_code=fast_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(code=50001, message=f"menu setup failed: {e}"),
         )
+
+
+@router.post("/wechat_official/push/latest", summary="尝试推送最新文章链接给关注用户/绑定用户")
+async def service_push_latest_article(
+    audience: Literal["bindings", "followers"] = Query("bindings", description="bindings=站内已绑定用户；followers=公众号全部关注用户(openid 列表)"),
+    limit: int = Query(1, ge=1, le=200, description="本次最多推送人数（默认 1 用于测试）"),
+    dry_run: bool = Query(False, description="仅返回收件人列表（脱敏），不实际发送"),
+    openid: str | None = Query(None, description="仅向指定 openid 发送（用于测试）"),
+    _key: str = Depends(require_service_api_key),
+):
+    session = DB.get_session()
+    try:
+        art = (
+            session.query(Article)
+            .filter(Article.status != DATA_STATUS.DELETED)
+            .filter(Article.url.isnot(None))
+            .filter(Article.url != "")
+            .order_by(Article.publish_time.desc())
+            .first()
+        )
+        if not art:
+            raise HTTPException(status_code=fast_status.HTTP_404_NOT_FOUND, detail=error_response(code=40401, message="没有可推送的文章"))
+
+        article_id = str(getattr(art, "id", "") or "")
+        title = str(getattr(art, "title", "") or "").strip()
+        url = str(getattr(art, "url", "") or "").strip()
+        if not url:
+            raise HTTPException(status_code=fast_status.HTTP_404_NOT_FOUND, detail=error_response(code=40402, message="最新文章缺少 url"))
+
+        text = f"【Dr.Lemon订阅助手】最新文章\n{title}\n{url}".strip()
+
+        recipients: list[str] = []
+        if openid and str(openid).strip():
+            recipients = [str(openid).strip()]
+        elif audience == "bindings":
+            rows = session.query(UserWechatBinding).filter(UserWechatBinding.is_active == 1).all()
+            for r in rows:
+                oid = str(getattr(r, "wechat_openid", "") or "").strip()
+                if oid:
+                    recipients.append(oid)
+        else:
+            # followers: fetch openids via WeChat API (may require permissions).
+            client = WeChatOfficialClient()
+            next_openid = ""
+            seen: set[str] = set()
+            while len(recipients) < limit:
+                data = client.list_followers(next_openid=next_openid)
+                batch = list(((data.get("data") or {}).get("openid")) or [])
+                for oid in batch:
+                    s = str(oid or "").strip()
+                    if not s or s in seen:
+                        continue
+                    seen.add(s)
+                    recipients.append(s)
+                    if len(recipients) >= limit:
+                        break
+                next_openid = str(data.get("next_openid") or "").strip()
+                if not batch or not next_openid:
+                    break
+
+        # de-dup + cap
+        uniq: list[str] = []
+        seen2: set[str] = set()
+        for r in recipients:
+            if r in seen2:
+                continue
+            seen2.add(r)
+            uniq.append(r)
+            if len(uniq) >= limit:
+                break
+        recipients = uniq
+
+        if dry_run:
+            return success_response(
+                {
+                    "article": {"id": article_id, "title": title, "url": url},
+                    "audience": audience,
+                    "limit": limit,
+                    "recipients": [_mask_openid(x) for x in recipients],
+                    "message_text": text,
+                }
+            )
+
+        client = WeChatOfficialClient()
+        results = []
+        sent = 0
+        failed = 0
+        for r in recipients:
+            try:
+                client.send_custom_text(r, text)
+                sent += 1
+                results.append({"openid": _mask_openid(r), "ok": True})
+            except Exception as e:
+                failed += 1
+                results.append({"openid": _mask_openid(r), "ok": False, "error": str(e)[:240]})
+
+        return success_response(
+            {
+                "article": {"id": article_id, "title": title, "url": url},
+                "audience": audience,
+                "limit": limit,
+                "sent": sent,
+                "failed": failed,
+                "results": results,
+            }
+        )
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
