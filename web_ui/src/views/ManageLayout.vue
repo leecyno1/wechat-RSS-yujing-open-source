@@ -3,7 +3,7 @@
     <div class="manage-card">
       <a-tabs type="rounded" size="small" :active-key="activeTab" @change="onTabChange">
         <a-tab-pane key="subscriptions" title="订阅管理" />
-        <a-tab-pane key="topics" title="专题" />
+        <a-tab-pane key="topics" title="频道" />
       </a-tabs>
     </div>
 
@@ -45,4 +45,3 @@ const onTabChange = (key: string) => {
   margin-bottom: 12px;
 }
 </style>
-

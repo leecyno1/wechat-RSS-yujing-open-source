@@ -29,7 +29,7 @@
 	              long
 	              @click="leftTab = 'topics'"
 	            >
-	              我的专题
+	              我的频道
 	              <a-badge :count="topics.length" :max-count="99" />
             </a-button>
           </div>
@@ -80,8 +80,8 @@
 
           <div v-else class="sider-list">
             <div class="sider-section">
-              <div class="section-title">我的专题</div>
-              <a-button size="small" type="outline" @click="goTopics">管理专题</a-button>
+              <div class="section-title">我的频道</div>
+              <a-button size="small" type="outline" @click="goTopics">管理频道</a-button>
             </div>
             <a-list :bordered="false" class="channel-list">
               <a-list-item v-for="t in topics" :key="t.id" class="channel-item" @click.stop="selectTopic(t)">
@@ -118,7 +118,6 @@
             </a-button>
             <a-button type="outline" @click="goPlaza">频道广场</a-button>
             <a-button type="outline" @click="goCreateChannel">创建频道</a-button>
-            <a-button type="outline" @click="goExport">导入OPML</a-button>
           </div>
         </div>
 
@@ -234,16 +233,6 @@
         </div>
       </a-layout-sider>
     </a-layout>
-
-    <a-drawer v-model:visible="contentDrawerVisible" width="880px" :footer="false" title="全文阅读">
-      <a-spin :loading="contentLoading">
-        <div class="full-title">{{ activeArticleTitle }}</div>
-        <div v-if="activeArticleUrl" class="full-meta">
-          <a-link :href="activeArticleUrl" target="_blank">原文链接</a-link>
-        </div>
-        <div class="full-content" v-html="activeArticleContent"></div>
-      </a-spin>
-    </a-drawer>
   </div>
 </template>
 
@@ -251,7 +240,6 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { ProxyImage } from '@/utils/constants'
 import {
   getArticleDetailPublic,
   getPublicChannelArticles,
@@ -297,11 +285,6 @@ const insightRetry = ref(0)
 const INSIGHT_RETRY_MAX = 10
 let insightRetryTimer: any = null
 const autoFetchedContent = new Set<string>()
-
-const contentDrawerVisible = ref(false)
-const contentLoading = ref(false)
-const activeArticleContent = ref<string>('')
-const activeArticleUrl = ref<string>('')
 
 const markAllLoading = ref(false)
 const autoUpdateLoading = ref(false)
@@ -600,7 +583,7 @@ const selectChannel = async (id: string, silent?: boolean) => {
   insight.value = null
   const ch = channels.value.find(c => c.id === id)
   if (id.startsWith('topic:')) {
-    activeChannelName.value = activeTopic.value?.name || '专题'
+    activeChannelName.value = activeTopic.value?.name || '频道'
   } else {
     activeChannelName.value = id === 'all' ? '全部订阅' : ch?.name || ''
   }
@@ -663,11 +646,21 @@ const selectArticle = async (article: any) => {
 
 const onArticleDblClick = async (article: any) => {
   if (!article) return
-  const articleId = String(article.id || '')
-  if (articleId && articleId !== activeArticleId.value) {
-    await selectArticle(article)
+  const directUrl = String(article.url || article.link || '')
+  if (directUrl) {
+    window.open(directUrl, '_blank', 'noopener,noreferrer')
+    return
   }
-  await openFullContent()
+  const articleId = String(article.id || '')
+  if (!articleId) return
+  try {
+    const res: any = await getArticleDetailPublic(articleId)
+    const url = String(res?.url || '')
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    else Message.info('未找到原文链接')
+  } catch (e: any) {
+    Message.error(e?.message || '打开原文失败')
+  }
 }
 
 const copyShareLink = async () => {
@@ -681,32 +674,6 @@ const copyShareLink = async () => {
     Message.success('已复制分享链接')
   } catch (e) {
     Message.error('复制失败')
-  }
-}
-
-const openFullContent = async () => {
-  if (!activeArticleId.value) return
-  contentLoading.value = true
-  try {
-    const res: any = await getArticleDetailPublic(activeArticleId.value)
-    activeArticleUrl.value = res.url || ''
-    let html = res.content || ''
-    if (!(html || '').trim() && hasToken.value) {
-      try {
-        await fetchArticleContent(activeArticleId.value, { force: false })
-        const res2: any = await getArticleDetailPublic(activeArticleId.value)
-        activeArticleUrl.value = res2.url || activeArticleUrl.value
-        html = res2.content || ''
-      } catch {
-        // ignore
-      }
-    }
-    activeArticleContent.value = ProxyImage(html || '')
-    contentDrawerVisible.value = true
-  } catch (e: any) {
-    Message.error(e?.message || '获取全文失败')
-  } finally {
-    contentLoading.value = false
   }
 }
 
@@ -737,7 +704,6 @@ const markAllReadForCurrent = async () => {
 
 const goPlaza = () => router.push('/add-subscription')
 const goCreateChannel = () => router.push('/manage/topics/add')
-const goExport = () => router.push('/export/records')
 	const goTopics = () => router.push('/manage/topics')
 
 const selectTopic = async (t: any, silent?: boolean) => {

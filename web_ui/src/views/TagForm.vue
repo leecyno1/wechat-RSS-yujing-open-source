@@ -22,7 +22,7 @@ const formModel = ref<TagCreate>({
 })
 
 const rules = {
-  name: [{ required: true, message: '请输入专题名称' }]
+  name: [{ required: true, message: '请输入频道名称' }]
 }
 
 const fetchTag = async (id: string) => {
@@ -40,7 +40,7 @@ const fetchTag = async (id: string) => {
       }
     })
   } catch (error) {
-    Message.error('获取专题详情失败')
+    Message.error('获取频道详情失败')
   } finally {
     loading.value = false
   }
@@ -123,8 +123,8 @@ onMounted(() => {
 <template>
   <div class="tag-form">
     <a-page-header
-      :title="isEdit ? '编辑专题' : '添加专题'"
-      subtitle="专题信息"
+      :title="isEdit ? '编辑频道' : '添加频道'"
+      subtitle="频道信息"
       @back="router.go(-1)"
     />
 
@@ -135,8 +135,8 @@ onMounted(() => {
         layout="vertical"
         @submit="handleSubmit"
       >
-        <a-form-item label="专题名称" field="name">
-          <a-input v-model="formModel.name" placeholder="请输入专题名称" />
+        <a-form-item label="频道名称" field="name">
+          <a-input v-model="formModel.name" placeholder="请输入频道名称" />
         </a-form-item>
 
         <a-form-item label="封面图" field="cover">
@@ -169,7 +169,7 @@ onMounted(() => {
         <a-form-item label="简介" field="intro">
           <a-textarea
             v-model="formModel.intro"
-            placeholder="请输入专题简介"
+            placeholder="请输入频道简介"
             :auto-size="{ minRows: 3 }"
           />
         </a-form-item>
