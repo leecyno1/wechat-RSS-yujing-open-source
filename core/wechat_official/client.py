@@ -50,10 +50,16 @@ class WeChatOfficialClient:
         self.base_url = "https://api.weixin.qq.com"
 
     def _appid(self) -> str:
-        return str(cfg.get("wechat_official.appid", "") or "").strip()
+        v = str(cfg.get("wechat_official.appid", "") or "").strip()
+        if v:
+            return v
+        return str(os.getenv("WECHAT_OFFICIAL_APPID", "") or "").strip()
 
     def _secret(self) -> str:
-        return str(cfg.get("wechat_official.appsecret", "") or "").strip()
+        v = str(cfg.get("wechat_official.appsecret", "") or "").strip()
+        if v:
+            return v
+        return str(os.getenv("WECHAT_OFFICIAL_APPSECRET", "") or "").strip()
 
     def _timeout(self) -> int:
         try:

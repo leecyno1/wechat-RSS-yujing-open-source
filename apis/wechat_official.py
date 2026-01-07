@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from datetime import datetime
+import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response, status as fast_status
 
@@ -16,10 +17,23 @@ from core.wechat_official import WeChatCrypto, WeChatOfficialClient, verify_msg_
 
 
 router = APIRouter(prefix="/wechat_official", tags=["WeChat Official"])
+legacy_router = APIRouter(tags=["WeChat Official"], include_in_schema=False)
 
 
 def _cfg_str(key: str) -> str:
-    return str(cfg.get(key, "") or "").strip()
+    v = str(cfg.get(key, "") or "").strip()
+    if v:
+        return v
+    env_map = {
+        "wechat_official.appid": "WECHAT_OFFICIAL_APPID",
+        "wechat_official.appsecret": "WECHAT_OFFICIAL_APPSECRET",
+        "wechat_official.token": "WECHAT_OFFICIAL_TOKEN",
+        "wechat_official.encoding_aes_key": "WECHAT_OFFICIAL_ENCODING_AES_KEY",
+    }
+    env_key = env_map.get(key)
+    if not env_key:
+        return ""
+    return str(os.getenv(env_key, "") or "").strip()
 
 
 def _parse_xml(xml_text: str) -> dict[str, str]:
@@ -388,3 +402,44 @@ async def wechat_official_callback(
                 background_tasks.add_task(_send_text, openid, reply)
 
     return Response(content="success")
+
+
+# Compatibility: some deployments already configured WeChat server callback as `/callback/command`.
+@legacy_router.get("/callback/command")
+async def legacy_wechat_official_verify(
+    signature: str | None = Query(None),
+    timestamp: str | None = Query(None),
+    nonce: str | None = Query(None),
+    echostr: str | None = Query(None),
+    encrypt_type: str | None = Query(None),
+    msg_signature: str | None = Query(None),
+):
+    return await wechat_official_verify(
+        signature=signature,
+        timestamp=timestamp,
+        nonce=nonce,
+        echostr=echostr,
+        encrypt_type=encrypt_type,
+        msg_signature=msg_signature,
+    )
+
+
+@legacy_router.post("/callback/command")
+async def legacy_wechat_official_callback(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    signature: str | None = Query(None),
+    timestamp: str | None = Query(None),
+    nonce: str | None = Query(None),
+    encrypt_type: str | None = Query(None),
+    msg_signature: str | None = Query(None),
+):
+    return await wechat_official_callback(
+        request=request,
+        background_tasks=background_tasks,
+        signature=signature,
+        timestamp=timestamp,
+        nonce=nonce,
+        encrypt_type=encrypt_type,
+        msg_signature=msg_signature,
+    )

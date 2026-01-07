@@ -28,6 +28,7 @@ from apis.channels import router as channels_router
 from apis.service_api import router as service_router
 from apis.digest import router as digest_router
 from apis.binding import router as binding_router
+from apis.wechat_official import legacy_router as wechat_official_legacy_router
 from apis.wechat_official import router as wechat_official_router
 from apis.langbot_webhook import router as langbot_router
 import apis
@@ -104,6 +105,7 @@ feeds_router.include_router(feed_router)
 app.include_router(api_router)
 app.include_router(resource_router)
 app.include_router(feeds_router)
+app.include_router(wechat_official_legacy_router)
 
 # 静态文件服务配置
 app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
