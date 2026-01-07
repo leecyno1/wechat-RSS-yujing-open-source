@@ -562,24 +562,30 @@ async def service_push_latest_article(
                 if oid:
                     recipients.append(oid)
         else:
-            # followers: fetch openids via WeChat API (may require permissions).
-            client = WeChatOfficialClient()
-            next_openid = ""
-            seen: set[str] = set()
-            while len(recipients) < limit:
-                data = client.list_followers(next_openid=next_openid)
-                batch = list(((data.get("data") or {}).get("openid")) or [])
-                for oid in batch:
-                    s = str(oid or "").strip()
-                    if not s or s in seen:
-                        continue
-                    seen.add(s)
-                    recipients.append(s)
-                    if len(recipients) >= limit:
+            # followers: fetch openids via WeChat API (may require permissions / IP whitelist).
+            try:
+                client = WeChatOfficialClient()
+                next_openid = ""
+                seen: set[str] = set()
+                while len(recipients) < limit:
+                    data = client.list_followers(next_openid=next_openid)
+                    batch = list(((data.get("data") or {}).get("openid")) or [])
+                    for oid in batch:
+                        s = str(oid or "").strip()
+                        if not s or s in seen:
+                            continue
+                        seen.add(s)
+                        recipients.append(s)
+                        if len(recipients) >= limit:
+                            break
+                    next_openid = str(data.get("next_openid") or "").strip()
+                    if not batch or not next_openid:
                         break
-                next_openid = str(data.get("next_openid") or "").strip()
-                if not batch or not next_openid:
-                    break
+            except Exception as e:
+                raise HTTPException(
+                    status_code=fast_status.HTTP_502_BAD_GATEWAY,
+                    detail=error_response(code=50201, message=f"wechat api failed: {e}"),
+                )
 
         # de-dup + cap
         uniq: list[str] = []
