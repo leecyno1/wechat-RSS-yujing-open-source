@@ -3,6 +3,9 @@ import time
 import sys
 import psutil
 import os
+import json
+import ipaddress
+import urllib.request
 from fastapi import APIRouter,Depends
 from typing import Dict, Any
 from core.auth import get_current_user
@@ -47,6 +50,7 @@ async def get_base_info() -> Dict[str, Any]:
     
 
 _PROMO_QR_CACHE: dict[str, Any] = {"url": None, "png": None}
+_EGRESS_IP_CACHE: dict[str, Any] = {"ts": 0.0, "ip": "", "source": ""}
 
 
 @router.get("/promo/qr", summary="推广二维码(关注公众号)")
@@ -86,6 +90,49 @@ async def promo_qr() -> Response:
     _PROMO_QR_CACHE["url"] = url
     _PROMO_QR_CACHE["png"] = png
     return Response(content=png, media_type="image/png")
+
+
+@router.get("/egress_ip", summary="获取服务出口IP(用于公众号IP白名单)")
+async def get_egress_ip() -> Dict[str, Any]:
+    """Best-effort egress IP detection.
+
+    NOTE: domain resolves to *ingress*; WeChat IP whitelist needs the *egress* IP used to call WeChat APIs.
+    """
+    now = time.time()
+    try:
+        ts = float(_EGRESS_IP_CACHE.get("ts") or 0.0)
+    except Exception:
+        ts = 0.0
+    if _EGRESS_IP_CACHE.get("ip") and (now - ts) < 300:
+        return success_response(data={"ip": _EGRESS_IP_CACHE.get("ip"), "source": _EGRESS_IP_CACHE.get("source"), "cached": True})
+
+    providers = [
+        ("ipify", "https://api.ipify.org?format=json"),
+        ("icanhazip", "https://icanhazip.com"),
+        ("ifconfig.me", "https://ifconfig.me/ip"),
+    ]
+    last_err = ""
+    for name, url in providers:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "we-mp-rss/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                raw = resp.read().decode("utf-8", errors="ignore").strip()
+            if not raw:
+                continue
+            if name == "ipify":
+                obj = json.loads(raw)
+                raw = str(obj.get("ip") or "").strip()
+            # validate
+            ipaddress.ip_address(raw)
+            _EGRESS_IP_CACHE["ts"] = now
+            _EGRESS_IP_CACHE["ip"] = raw
+            _EGRESS_IP_CACHE["source"] = name
+            return success_response(data={"ip": raw, "source": name, "cached": False})
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    return error_response(code=50003, message=f"获取出口IP失败: {last_err or 'unknown'}")
 
 
 from core.resource import get_system_resources
