@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+import re
+import time
 from datetime import datetime
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response, status as fast_status
+from sqlalchemy import func, or_
 
 from core.config import cfg
 from core.db import DB
 from core.digest import DigestService
 from core.log import logger
+from core.models.article import Article
+from core.models.feed import Feed
+from core.models.user_subscription import UserSubscription
 from core.models.user import User as DBUser
 from core.models.user_bind_code import UserBindCode
 from core.models.user_wechat_binding import UserWechatBinding
@@ -63,10 +69,20 @@ def _menu_digest_key() -> str:
     return _cfg_str("wechat_official.menu.digest_key") or "DIGEST_TODAY"
 
 
+def _mask_openid(v: str) -> str:
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    if len(s) <= 10:
+        return s[:2] + "***"
+    return s[:4] + "***" + s[-4:]
+
+
 def _send_text(openid: str, text: str) -> None:
     try:
         WeChatOfficialClient().send_custom_text(openid, text)
-    except Exception:
+    except Exception as e:
+        logger.warning("WeChatOfficial: send failed openid=%s err=%s", _mask_openid(openid), str(e))
         return
 
 
@@ -264,6 +280,172 @@ def _handle_click_digest(openid: str) -> None:
             pass
 
 
+def _is_help_query(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s:
+        return True
+    sl = s.lower()
+    if sl in ("help", "?", "？", "h", "帮助"):
+        return True
+    keys = ["绑定", "关注", "怎么用", "如何使用", "使用说明", "注册", "登录", "怎么登录", "如何绑定"]
+    return any(k in s for k in keys)
+
+
+def _is_latest_query(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s:
+        return False
+    keys = ["最新", "今天", "今日", "刚刚", "近期", "最近", "新文章"]
+    return any(k in s for k in keys)
+
+
+def _is_hot_query(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s:
+        return False
+    keys = ["热门", "最热", "爆款", "高赞", "点赞", "推荐", "热榜"]
+    return any(k in s for k in keys)
+
+
+def _clean_query(text: str) -> str:
+    s = str(text or "").strip()
+    s = re.sub(r"[\\s\\u3000]+", " ", s).strip()
+    s = re.sub(r"^(推荐|找|搜索|查找|帮我找)[:：\\s]*", "", s).strip()
+    return s
+
+
+def _format_articles_message(*, title: str, items: list[dict], extra: str = "") -> str:
+    lines: list[str] = [str(title or "").strip()]
+    for i, it in enumerate(items, start=1):
+        t = str(it.get("title") or "").strip()
+        u = str(it.get("url") or "").strip()
+        mp = str(it.get("mp") or "").strip()
+        if mp:
+            lines.append(f"{i}. {t}（{mp}）")
+        else:
+            lines.append(f"{i}. {t}")
+        if u:
+            lines.append(u)
+    if extra:
+        lines.append("")
+        lines.append(str(extra))
+    out = "\n".join([x for x in lines if x is not None]).strip()
+    return out[:1800]
+
+
+def _handle_text_query(openid: str, content: str) -> None:
+    openid_s = str(openid or "").strip()
+    text = str(content or "").strip()
+    if not openid_s or not text:
+        return
+
+    qraw = _clean_query(text)
+
+    if _is_help_query(qraw):
+        _send_text(
+            openid_s,
+            "【Dr.Lemon订阅助手】关注与绑定方式：\n"
+            "1）登录网站 → 点击右上角【关注柠檬博士】\n"
+            "2）扫描弹窗里的【绑定二维码】关注（或已关注直接扫码）→ 自动绑定\n"
+            "3）回到网站点【刷新绑定状态】确认\n\n"
+            "备用方式：把网站显示的“绑定码”直接发给本公众号，也可完成绑定。\n"
+            "绑定后：点击菜单【订阅推送】可获取今日精选+摘要。\n"
+            "也可直接发关键词（如“AI”“芯片”“投资”），我会为你推荐相关文章。",
+        )
+        return
+
+    session = DB.get_session()
+    try:
+        binding = (
+            session.query(UserWechatBinding)
+            .filter(UserWechatBinding.wechat_openid == openid_s)
+            .filter(UserWechatBinding.is_active == 1)
+            .first()
+        )
+        user_id = str(getattr(binding, "user_id", "") or "") if binding else ""
+
+        feed_ids: list[str] = []
+        if user_id:
+            rows = session.query(UserSubscription.feed_id).filter(UserSubscription.user_id == user_id).all()
+            feed_ids = [str(r[0] or "").strip() for r in rows if r and str(r[0] or "").strip()]
+
+        base_q = (
+            session.query(Article, Feed)
+            .join(Feed, Feed.id == Article.mp_id)
+            .filter(Article.status != 1000)
+            .filter(Article.url.isnot(None))
+            .filter(Article.url != "")
+        )
+        if feed_ids:
+            base_q = base_q.filter(Article.mp_id.in_(feed_ids))
+
+        limit = 5
+        now_ts = int(time.time())
+        hot_since = now_ts - 7 * 24 * 3600
+
+        items: list[dict] = []
+
+        if _is_latest_query(qraw):
+            rows = base_q.order_by(func.coalesce(Article.publish_time, 0).desc()).limit(limit).all()
+            for art, feed in rows:
+                items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
+            title = "【Dr.Lemon订阅助手】最新文章推荐"
+        else:
+            kw = qraw
+            if _is_hot_query(qraw):
+                kw = ""
+
+            q = base_q
+            if kw:
+                like_kw = f"%{kw}%"
+                q = q.filter(or_(Article.title.like(like_kw), Article.description.like(like_kw)))
+
+            if _is_hot_query(qraw):
+                q = q.filter(func.coalesce(Article.publish_time, 0) >= hot_since)
+                q = q.order_by(
+                    func.coalesce(Article.like_count, 0).desc(),
+                    func.coalesce(Article.recommend_count, 0).desc(),
+                    func.coalesce(Article.read_count, 0).desc(),
+                    func.coalesce(Article.publish_time, 0).desc(),
+                )
+            else:
+                q = q.order_by(
+                    func.coalesce(Article.like_count, 0).desc(),
+                    func.coalesce(Article.publish_time, 0).desc(),
+                )
+
+            rows = q.limit(limit).all()
+            for art, feed in rows:
+                items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
+
+            if items:
+                title = f"【Dr.Lemon订阅助手】为你推荐（{qraw}）"
+            else:
+                q2 = base_q.filter(func.coalesce(Article.publish_time, 0) >= hot_since).order_by(
+                    func.coalesce(Article.like_count, 0).desc(),
+                    func.coalesce(Article.publish_time, 0).desc(),
+                )
+                rows2 = q2.limit(limit).all()
+                if not rows2:
+                    rows2 = base_q.order_by(func.coalesce(Article.publish_time, 0).desc()).limit(limit).all()
+                for art, feed in rows2:
+                    items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
+                title = "【Dr.Lemon订阅助手】没有找到匹配内容，给你一份近期推荐"
+
+        extra = ""
+        if not user_id:
+            extra = "想要按你的订阅做个性化推荐：请先到网站点击【关注柠檬博士】扫码自动绑定。"
+        elif not feed_ids:
+            extra = "你还没有订阅任何公众号：先去网站添加订阅后，再发关键词我会更准。"
+
+        _send_text(openid_s, _format_articles_message(title=title, items=items, extra=extra))
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
 def _set_binding_active(openid: str, *, is_active: bool) -> bool:
     openid_s = str(openid or "").strip()
     if not openid_s:
@@ -400,6 +582,8 @@ async def wechat_official_callback(
             reply = _consume_bind_code_reply(openid, content)
             if reply:
                 background_tasks.add_task(_send_text, openid, reply)
+            else:
+                background_tasks.add_task(_handle_text_query, openid, content)
 
     return Response(content="success")
 
