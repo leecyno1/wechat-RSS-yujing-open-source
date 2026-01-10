@@ -110,8 +110,9 @@ async def get_egress_ip() -> Dict[str, Any]:
         ("ipify", "https://api.ipify.org?format=json"),
         ("icanhazip", "https://icanhazip.com"),
         ("ifconfig.me", "https://ifconfig.me/ip"),
+        ("ipinfo", "https://ipinfo.io/ip"),
     ]
-    last_err = ""
+    errors: list[dict[str, Any]] = []
     for name, url in providers:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "we-mp-rss/1.0"})
@@ -129,10 +130,31 @@ async def get_egress_ip() -> Dict[str, Any]:
             _EGRESS_IP_CACHE["source"] = name
             return success_response(data={"ip": raw, "source": name, "cached": False})
         except Exception as e:
-            last_err = str(e)
+            errors.append({"provider": name, "url": url, "error": str(e)})
             continue
 
-    return error_response(code=50003, message=f"获取出口IP失败: {last_err or 'unknown'}")
+    # Fallback: local interface IP (NOT the NAT egress IP). Useful for debugging when outbound is blocked.
+    local_ip = ""
+    try:
+        import socket
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            local_ip = str(s.getsockname()[0] or "")
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+    except Exception:
+        local_ip = ""
+
+    return error_response(
+        code=50003,
+        message="获取出口IP失败：服务可能无外网访问权限，或被网关拦截。",
+        data={"ip": None, "source": None, "cached": False, "local_ip": local_ip, "errors": errors, "hint": "请在公众号后台把出口IP加入 IP白名单后重试（注意：local_ip 不是出口IP）。"},
+    )
 
 
 from core.resource import get_system_resources

@@ -94,6 +94,8 @@ wechat_official:
   token: ${WECHAT_OFFICIAL_TOKEN:-}
   # 消息加解密密钥 EncodingAESKey（安全模式/兼容模式需要）
   encoding_aes_key: ${WECHAT_OFFICIAL_ENCODING_AES_KEY:-}
+  # 桥接Webhook Token（当公众号回调在其它服务上，由它转发事件到本项目时使用）
+  bridge_token: ${WECHAT_OFFICIAL_BRIDGE_TOKEN:-}
   # 是否使用 stable_token 获取 access_token（推荐 True）
   use_stable_token: ${WECHAT_OFFICIAL_USE_STABLE_TOKEN:-True}
   # HTTP 请求超时(秒)
@@ -135,7 +137,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,langbot.webhook_token}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,wechat_official.bridge_token,langbot.webhook_token}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import xml.etree.ElementTree as ET
 import re
+import secrets
 import time
 from datetime import datetime
 import os
@@ -35,6 +37,7 @@ def _cfg_str(key: str) -> str:
         "wechat_official.appsecret": "WECHAT_OFFICIAL_APPSECRET",
         "wechat_official.token": "WECHAT_OFFICIAL_TOKEN",
         "wechat_official.encoding_aes_key": "WECHAT_OFFICIAL_ENCODING_AES_KEY",
+        "wechat_official.bridge_token": "WECHAT_OFFICIAL_BRIDGE_TOKEN",
     }
     env_key = env_map.get(key)
     if not env_key:
@@ -84,6 +87,45 @@ def _send_text(openid: str, text: str) -> None:
     except Exception as e:
         logger.warning("WeChatOfficial: send failed openid=%s err=%s", _mask_openid(openid), str(e))
         return
+
+
+def _safe_cdata(text: str) -> str:
+    # Avoid breaking XML if content contains "]]>"
+    s = str(text or "")
+    return "<![CDATA[" + s.replace("]]>", "]]]]><![CDATA[>") + "]]>"
+
+
+def _sha1_signature(parts: list[str]) -> str:
+    raw = "".join(sorted([str(p or "").strip() for p in parts if str(p or "").strip()])).encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()
+
+
+def _build_text_reply_xml(*, to_user: str, from_user: str, content: str, create_time: int | None = None) -> str:
+    ct = int(create_time or int(time.time()))
+    return (
+        "<xml>"
+        f"<ToUserName>{_safe_cdata(to_user)}</ToUserName>"
+        f"<FromUserName>{_safe_cdata(from_user)}</FromUserName>"
+        f"<CreateTime>{ct}</CreateTime>"
+        "<MsgType><![CDATA[text]]></MsgType>"
+        f"<Content>{_safe_cdata(content)}</Content>"
+        "</xml>"
+    )
+
+
+def _wrap_aes_reply(*, token: str, crypto: WeChatCrypto, plaintext_xml: str, nonce: str | None = None, timestamp: str | None = None) -> str:
+    nn = str(nonce or "").strip() or secrets.token_urlsafe(8)
+    ts = str(timestamp or "").strip() or str(int(time.time()))
+    encrypted = crypto.encrypt(plaintext_xml)
+    sig = _sha1_signature([token, ts, nn, encrypted])
+    return (
+        "<xml>"
+        f"<Encrypt>{_safe_cdata(encrypted)}</Encrypt>"
+        f"<MsgSignature>{_safe_cdata(sig)}</MsgSignature>"
+        f"<TimeStamp>{ts}</TimeStamp>"
+        f"<Nonce>{_safe_cdata(nn)}</Nonce>"
+        "</xml>"
+    )
 
 
 def _normalize_alnum_upper(raw: str) -> str:
@@ -235,10 +277,10 @@ def _handle_text_bind(openid: str, content: str) -> None:
         _send_text(str(openid or "").strip(), reply)
 
 
-def _handle_click_digest(openid: str) -> None:
+def _build_click_digest_reply_text(openid: str) -> str:
     openid_s = str(openid or "").strip()
     if not openid_s:
-        return
+        return ""
 
     session = DB.get_session()
     try:
@@ -249,35 +291,37 @@ def _handle_click_digest(openid: str) -> None:
             .first()
         )
         if not binding:
-            _send_text(
-                openid_s,
-                "【Dr.Lemon订阅助手】\n你还未绑定站内账号。\n\n请先登录网站，在【信息-绑定】生成绑定码，然后把绑定码发给本公众号完成绑定。",
+            return (
+                "【Dr.Lemon订阅助手】\n你还未绑定站内账号。\n\n"
+                "请先登录网站，在【信息-绑定】生成绑定码，然后把绑定码发给本公众号完成绑定。"
             )
-            return
 
         user_id = str(getattr(binding, "user_id", "") or "")
         if not user_id:
-            _send_text(openid_s, "【Dr.Lemon订阅助手】绑定信息异常，请重新绑定。")
-            return
+            return "【Dr.Lemon订阅助手】绑定信息异常，请重新绑定。"
 
         svc = DigestService()
         digest = svc.build_user_digest(user_id, slot="daily")
         total = int(((digest.get("stats") or {}).get("total")) or 0)
         if total <= 0:
-            _send_text(openid_s, "【Dr.Lemon订阅助手】今天暂无更新文章。")
-            return
+            return "【Dr.Lemon订阅助手】今天暂无更新文章。"
 
         text = str(((digest.get("message") or {}).get("text")) or "").strip()
         if not text:
-            _send_text(openid_s, "【Dr.Lemon订阅助手】生成推送内容失败，请稍后再试。")
-            return
+            return "【Dr.Lemon订阅助手】生成推送内容失败，请稍后再试。"
 
-        _send_text(openid_s, text)
+        return text
     finally:
         try:
             session.close()
         except Exception:
             pass
+
+
+def _handle_click_digest(openid: str) -> None:
+    text = _build_click_digest_reply_text(openid)
+    if text:
+        _send_text(str(openid or "").strip(), text)
 
 
 def _is_help_query(text: str) -> bool:
@@ -333,26 +377,24 @@ def _format_articles_message(*, title: str, items: list[dict], extra: str = "") 
     return out[:1800]
 
 
-def _handle_text_query(openid: str, content: str) -> None:
+def _build_text_query_reply_text(openid: str, content: str) -> str:
     openid_s = str(openid or "").strip()
     text = str(content or "").strip()
     if not openid_s or not text:
-        return
+        return ""
 
     qraw = _clean_query(text)
 
     if _is_help_query(qraw):
-        _send_text(
-            openid_s,
+        return (
             "【Dr.Lemon订阅助手】关注与绑定方式：\n"
             "1）登录网站 → 点击右上角【关注柠檬博士】\n"
             "2）扫描弹窗里的【绑定二维码】关注（或已关注直接扫码）→ 自动绑定\n"
             "3）回到网站点【刷新绑定状态】确认\n\n"
             "备用方式：把网站显示的“绑定码”直接发给本公众号，也可完成绑定。\n"
             "绑定后：点击菜单【订阅推送】可获取今日精选+摘要。\n"
-            "也可直接发关键词（如“AI”“芯片”“投资”），我会为你推荐相关文章。",
+            "也可直接发关键词（如“AI”“芯片”“投资”），我会为你推荐相关文章。"
         )
-        return
 
     session = DB.get_session()
     try:
@@ -438,12 +480,124 @@ def _handle_text_query(openid: str, content: str) -> None:
         elif not feed_ids:
             extra = "你还没有订阅任何公众号：先去网站添加订阅后，再发关键词我会更准。"
 
-        _send_text(openid_s, _format_articles_message(title=title, items=items, extra=extra))
+        return _format_articles_message(title=title, items=items, extra=extra)
     finally:
         try:
             session.close()
         except Exception:
             pass
+
+
+def _handle_text_query(openid: str, content: str) -> None:
+    text = _build_text_query_reply_text(openid, content)
+    if text:
+        _send_text(str(openid or "").strip(), text)
+
+
+def _build_reply_text_from_msg(msg: dict[str, str]) -> str:
+    msg_type = str(msg.get("MsgType") or "").strip().lower()
+    if msg_type == "event":
+        event = str(msg.get("Event") or "").strip().upper()
+        openid = str(msg.get("FromUserName") or "").strip()
+        event_key = str(msg.get("EventKey") or "").strip()
+        if event == "CLICK":
+            if event_key == _menu_digest_key():
+                return _build_click_digest_reply_text(openid)
+            return ""
+        if event in ("SUBSCRIBE", "SCAN"):
+            # Parameterized QRCode: SUBSCRIBE has EventKey "qrscene_xxx", SCAN has "xxx".
+            # Use EventKey as content so _extract_bind_code can find the binding code.
+            if openid and event_key:
+                reply = _consume_bind_code_reply(openid, event_key)
+                if reply:
+                    return reply
+            if event == "SUBSCRIBE" and openid:
+                if _set_binding_active(openid, is_active=True):
+                    return "【Dr.Lemon订阅助手】欢迎回来！\n已恢复你的绑定状态。\n点击菜单【订阅推送】可获取今日精选+摘要。"
+            # No scene, no binding: show brief instructions.
+            return "【Dr.Lemon订阅助手】欢迎关注！\n请先登录网站，在【信息-绑定】生成绑定码，并把绑定码发给本公众号完成绑定。"
+        if event == "UNSUBSCRIBE":
+            if openid:
+                _set_binding_active(openid, is_active=False)
+            return ""
+        return ""
+
+    if msg_type == "text":
+        openid = str(msg.get("FromUserName") or "").strip()
+        content = str(msg.get("Content") or "").strip()
+        if not (openid and content):
+            return ""
+        reply = _consume_bind_code_reply(openid, content)
+        if reply:
+            return reply
+        return _build_text_query_reply_text(openid, content)
+
+    return ""
+
+
+def _require_bridge_token(token: str | None) -> None:
+    expected = _cfg_str("wechat_official.bridge_token")
+    if not expected:
+        raise HTTPException(
+            status_code=fast_status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="wechat_official.bridge_token is not set (set WECHAT_OFFICIAL_BRIDGE_TOKEN)",
+        )
+    if not token or token != expected:
+        raise HTTPException(status_code=fast_status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+
+
+def _normalize_bridge_payload(payload: dict) -> dict[str, str]:
+    # Accept either:
+    # - {"xml": "<xml>...</xml>"} (decrypted or plaintext)
+    # - {"MsgType": "...", "FromUserName": "...", ...}
+    # - {"msg_type": "text", "openid": "...", "content": "...", "event": "...", "event_key": "..."}
+    if isinstance(payload.get("xml"), str) and payload.get("xml"):
+        return _parse_xml(str(payload.get("xml") or ""))
+
+    if isinstance(payload.get("MsgType"), str) and isinstance(payload.get("FromUserName"), str):
+        return {str(k): str(v or "") for k, v in payload.items() if isinstance(k, str)}
+
+    msg: dict[str, str] = {}
+    msg["MsgType"] = str(payload.get("msg_type") or payload.get("type") or payload.get("MsgType") or "").strip()
+    msg["FromUserName"] = str(payload.get("openid") or payload.get("from_user") or payload.get("FromUserName") or "").strip()
+    msg["ToUserName"] = str(payload.get("to_user") or payload.get("ToUserName") or "").strip()
+    msg["Content"] = str(payload.get("content") or payload.get("Content") or "").strip()
+    msg["Event"] = str(payload.get("event") or payload.get("Event") or "").strip()
+    msg["EventKey"] = str(payload.get("event_key") or payload.get("EventKey") or payload.get("key") or "").strip()
+    return msg
+
+
+@router.post("/bridge", summary="桥接Webhook: 外部服务转发公众号事件(返回 reply_text)")
+async def wechat_official_bridge(
+    request: Request,
+    token: str | None = Query(None, description="Bridge token (WECHAT_OFFICIAL_BRIDGE_TOKEN)"),
+):
+    _require_bridge_token(token)
+
+    msg: dict[str, str] = {}
+    ct = str(request.headers.get("content-type") or "").lower()
+    body = (await request.body()) or b""
+    body_text = body.decode("utf-8", errors="ignore").strip()
+
+    if "xml" in ct or body_text.startswith("<xml"):
+        msg = _parse_xml(body_text)
+    else:
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=fast_status.HTTP_400_BAD_REQUEST, detail="invalid payload (expect json or xml)")
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=fast_status.HTTP_400_BAD_REQUEST, detail="invalid payload (expect object)")
+        msg = _normalize_bridge_payload(payload)
+
+    reply_text = _build_reply_text_from_msg(msg).strip()
+    return {
+        "ok": True,
+        "skip_pipeline": bool(reply_text),
+        "handled": bool(reply_text),
+        "reply_text": reply_text,
+        "openid": str(msg.get("FromUserName") or msg.get("openid") or "").strip(),
+    }
 
 
 def _set_binding_active(openid: str, *, is_active: bool) -> bool:
@@ -549,43 +703,25 @@ async def wechat_official_callback(
         msg = _parse_xml(body_text)
 
     msg_type = str(msg.get("MsgType") or "").strip().lower()
-    if msg_type == "event":
-        event = str(msg.get("Event") or "").strip().upper()
-        openid = str(msg.get("FromUserName") or "").strip()
-        event_key = str(msg.get("EventKey") or "").strip()
-        if event == "CLICK":
-            if event_key == _menu_digest_key():
-                background_tasks.add_task(_handle_click_digest, openid)
-        elif event in ("SUBSCRIBE", "SCAN"):
-            # Parameterized QRCode: SUBSCRIBE has EventKey "qrscene_xxx", SCAN has "xxx".
-            # Use EventKey as content so _extract_bind_code can find the binding code.
-            if openid and event_key:
-                reply = _consume_bind_code_reply(openid, event_key)
-                if reply:
-                    background_tasks.add_task(_send_text, openid, reply)
-            else:
-                # If user re-subscribed but no scene, re-activate existing binding by openid.
-                if event == "SUBSCRIBE" and openid:
-                    if _set_binding_active(openid, is_active=True):
-                        background_tasks.add_task(
-                            _send_text,
-                            openid,
-                            "【Dr.Lemon订阅助手】欢迎回来！\n已恢复你的绑定状态。\n点击菜单【订阅推送】可获取今日精选+摘要。",
-                        )
-        elif event == "UNSUBSCRIBE":
-            if openid:
-                _set_binding_active(openid, is_active=False)
-    elif msg_type == "text":
-        openid = str(msg.get("FromUserName") or "").strip()
-        content = str(msg.get("Content") or "").strip()
-        if openid and content:
-            reply = _consume_bind_code_reply(openid, content)
-            if reply:
-                background_tasks.add_task(_send_text, openid, reply)
-            else:
-                background_tasks.add_task(_handle_text_query, openid, content)
+    reply_text = _build_reply_text_from_msg(msg).strip()
+    if not reply_text:
+        return Response(content="success")
 
-    return Response(content="success")
+    to_user = str(msg.get("FromUserName") or "").strip()
+    from_user = str(msg.get("ToUserName") or "").strip()
+    plain = _build_text_reply_xml(to_user=to_user, from_user=from_user, content=reply_text)
+
+    if is_aes:
+        crypto = _crypto_or_none()
+        if not crypto:
+            raise HTTPException(
+                status_code=fast_status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="wechat_official.appid/encoding_aes_key not set (required for aes mode)",
+            )
+        wrapped = _wrap_aes_reply(token=token, crypto=crypto, plaintext_xml=plain, nonce=nn, timestamp=str(int(time.time())))
+        return Response(content=wrapped, media_type="application/xml")
+
+    return Response(content=plain, media_type="application/xml")
 
 
 # Compatibility: some deployments already configured WeChat server callback as `/callback/command`.
