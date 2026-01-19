@@ -5,7 +5,7 @@ import sys
 from sqlalchemy import False_
 
 import driver
-from .playwright_driver import PlaywrightController,ControlDriver
+from .playwright_driver import PlaywrightController
 from PIL import Image
 from .success import Success
 import time
@@ -382,10 +382,9 @@ class Wx:
             return self.SESSION
         finally:
             self.release_lock()
-            # 只有在NeedExit为True且未登录成功时才清理资源
-            if NeedExit and 'controller' in locals() and not self._haslogin:
-                self.controller.cleanup()
+            if NeedExit:
                 self.Clean()
+                self.Close()
         return self.SESSION
     def format_token(self, cookies: list, token: str = ""):
         cookies_str=""
