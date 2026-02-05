@@ -23,22 +23,107 @@ def _pick_shard_model(article_id: str, models: list[str]) -> str:
     return models[idx]
 
 
+def _parse_shard_profiles(raw: Any) -> list[dict[str, str]]:
+    """Parse sharding profiles from JSON string / list.
+
+    A profile is an OpenAI-compatible endpoint config:
+    {name, provider?, api_url, api_key, model}
+    """
+    if raw is None:
+        return []
+    data: Any = raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return []
+        try:
+            data = json.loads(s)
+        except Exception:
+            return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        api_url = str(item.get("api_url") or "").strip()
+        api_key = str(item.get("api_key") or "").strip()
+        model = str(item.get("model") or "").strip()
+        provider = str(item.get("provider") or "").strip()
+        if not (name and api_url and api_key and model):
+            continue
+        out.append(
+            {
+                "name": name,
+                "provider": provider,
+                "api_url": api_url,
+                "api_key": api_key,
+                "model": model,
+            }
+        )
+    # Deterministic order to keep stable sharding across restarts.
+    out.sort(key=lambda x: x.get("name", ""))
+    return out
+
+
+def _pick_shard_profile(article_id: str, profiles: list[dict[str, str]]) -> dict[str, str]:
+    profiles = profiles or []
+    if not profiles:
+        return {}
+    h = hashlib.sha256(str(article_id or "").encode("utf-8")).digest()
+    idx = int.from_bytes(h[:4], "big") % len(profiles)
+    return profiles[idx]
+
+
 class InsightsService:
     def __init__(self):
         self.provider = cfg.get("llm.provider", "siliconflow")
         self.model = cfg.get("llm.siliconflow.model", "")
 
-        # Optional sharding: spread articles across multiple configured models (same provider).
         shard_enable = bool(cfg.get("llm.shard.enable", False))
+
+        # Optional sharding (strategy A): spread articles across multiple OpenAI-compatible profiles.
+        # This maximizes parallelism by using multiple providers / keys.
+        profiles_raw = cfg.get("llm.shard.profiles_json", "") or cfg.get("llm.shard.profiles", "")
+        self._shard_profiles = _parse_shard_profiles(profiles_raw)
+        self._shard_enable = shard_enable and bool(self._shard_profiles)
+
+        # Back-compat: older config supports sharding across models under a single provider.
         shard_models_raw = str(cfg.get("llm.shard.models", "") or "")
         self._shard_models = [m.strip() for m in shard_models_raw.split(",") if m.strip()]
-        self._shard_enable = shard_enable and bool(self._shard_models)
 
     def _model_for_article(self, article_id: str) -> str:
-        if not self._shard_enable:
+        if self._shard_enable:
+            prof = _pick_shard_profile(article_id, self._shard_profiles)
+            return (prof.get("model") or "").strip() or self.model
+        if not self._shard_models:
             return self.model
         picked = _pick_shard_model(article_id, self._shard_models)
         return picked or self.model
+
+    def _profile_for_article(self, article_id: str) -> dict[str, str]:
+        if not self._shard_enable:
+            return {}
+        return _pick_shard_profile(article_id, self._shard_profiles)
+
+    def _llm_profile_params(self, article_id: str) -> tuple[str, str, str, str]:
+        """Return (provider, api_url, api_key, model) for this article."""
+        if self._shard_enable:
+            prof = self._profile_for_article(article_id)
+            return (
+                str(prof.get("provider") or "").strip(),
+                str(prof.get("api_url") or "").strip(),
+                str(prof.get("api_key") or "").strip(),
+                str(prof.get("model") or "").strip(),
+            )
+        # Default (single provider)
+        return (
+            str(self.provider or "").strip(),
+            str(cfg.get("llm.siliconflow.api_url", "") or "").strip(),
+            str(cfg.get("llm.siliconflow.api_key", "") or "").strip(),
+            str(cfg.get("llm.siliconflow.model", "") or "").strip(),
+        )
 
     def ensure_cached(self, article_id: str) -> None:
         """Best-effort precompute & cache insights for better UX."""
@@ -348,8 +433,9 @@ class InsightsService:
             insight.content_hash = content_hash
             insight.status = 1
             insight.error = ""
-            insight.llm_provider = self.provider
-            insight.llm_model = self._model_for_article(article_id) or self.model
+            provider, _, _, model = self._llm_profile_params(article_id)
+            insight.llm_provider = provider or self.provider
+            insight.llm_model = model or self.model
 
             session.add(insight)
             session.commit()
@@ -382,9 +468,7 @@ class InsightsService:
             return insight
 
         # If LLM not configured, still persist a deterministic fallback so UI has data.
-        api_key = cfg.get("llm.siliconflow.api_key", "")
-        api_url = cfg.get("llm.siliconflow.api_url", "")
-        model = self._model_for_article(article_id)
+        provider, api_url, api_key, model = self._llm_profile_params(article_id)
         if not (api_key and api_url and model):
             data = self._fallback_key_points(insight)
             insight.key_points_json = json.dumps(data, ensure_ascii=False)
@@ -415,7 +499,7 @@ class InsightsService:
         if len(content_text) > max_chars:
             print_info(f"LLM input truncated: {len(content_text)} -> {len(clipped)} chars")
 
-        from core.llm.siliconflow import siliconflow_chat_json
+        from core.llm.openai_compat import openai_compat_chat_json
 
         system = (
             "你是一个信息提炼助手。只输出严格的 JSON，不要输出任何额外文字。"
@@ -429,7 +513,7 @@ class InsightsService:
         }
 
         try:
-            data = await siliconflow_chat_json(
+            data = await openai_compat_chat_json(
                 model=model,
                 api_url=api_url,
                 api_key=api_key,
@@ -458,7 +542,7 @@ class InsightsService:
             insight.error = str(e)
 
         insight.updated_at = datetime.now()
-        insight.llm_provider = self.provider
+        insight.llm_provider = provider or self.provider
         insight.llm_model = model
         session.add(insight)
         session.commit()
@@ -483,14 +567,12 @@ class InsightsService:
         ):
             return insight
 
-        api_key = cfg.get("llm.siliconflow.api_key", "")
-        api_url = cfg.get("llm.siliconflow.api_url", "")
-        model = self._model_for_article(article_id)
+        provider, api_url, api_key, model = self._llm_profile_params(article_id)
         if not (api_key and api_url and model):
             insight.status = 9
             insight.error = "LLM not configured; set SILICONFLOW_API_KEY / SILICONFLOW_API_URL / SILICONFLOW_MODEL."
             insight.updated_at = datetime.now()
-            insight.llm_provider = self.provider
+            insight.llm_provider = provider or self.provider
             insight.llm_model = model
             session.add(insight)
             session.commit()
@@ -505,7 +587,7 @@ class InsightsService:
             session.commit()
             return insight
 
-        from core.llm.siliconflow import siliconflow_chat_json
+        from core.llm.openai_compat import openai_compat_chat_json
 
         max_chars = int(cfg.get("llm.max_chars", 24000))
         clipped = content_text[:max_chars]
@@ -524,7 +606,7 @@ class InsightsService:
         }
 
         try:
-            data = await siliconflow_chat_json(
+            data = await openai_compat_chat_json(
                 model=model,
                 api_url=api_url,
                 api_key=api_key,
@@ -543,7 +625,7 @@ class InsightsService:
             insight.error = str(e)
 
         insight.updated_at = datetime.now()
-        insight.llm_provider = self.provider
+        insight.llm_provider = provider or self.provider
         insight.llm_model = model
         session.add(insight)
         session.commit()
