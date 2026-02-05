@@ -1,4 +1,5 @@
 import yaml
+import json
 from core.db import DB as db
 from core.models.config_management import ConfigManagement
 import logging
@@ -114,29 +115,35 @@ class ConfigManager:
         from core.config import cfg
         keys=cfg.get("safe.hide_config","db").split(",")
         print(keys)
+        def _emit(path: str, val: Any) -> None:
+            if not path:
+                return
+            if path in keys:
+                val = "***"
+            if isinstance(val, (dict, list)):
+                try:
+                    val = json.dumps(val, ensure_ascii=False)
+                except Exception:
+                    val = str(val)
+            config_list.append(
+                ConfigManagement(
+                    config_key=path,
+                    config_value=str(val) if val is not None else "",
+                    description="系统配置项",
+                )
+            )
+
+        def _walk(prefix: str, obj: Any) -> None:
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    k = str(k)
+                    p = f"{prefix}.{k}" if prefix else k
+                    _walk(p, v)
+                return
+            _emit(prefix, obj)
+
         try:
-            for key, value in config.items():
-                if key in keys:
-                    value="***"
-                    pass
-                if isinstance(value, dict):
-                    # 处理嵌套配置
-                    for sub_key, sub_value in value.items():
-                        config_key = f"{key}.{sub_key}"
-                        if config_key in keys:
-                            sub_value="***"
-                            pass
-                        config_list.append(ConfigManagement(
-                            config_key=config_key,
-                            config_value=str(sub_value) if sub_value is not None else '',
-                            description=f"{key}配置的子项"
-                        ))
-                else:
-                    config_list.append(ConfigManagement(
-                        config_key=key,
-                        config_value=str(value) if value is not None else '',
-                        description="系统配置项"
-                    ))
+            _walk("", config or {})
             
             self.logger.info("配置已成功转换为列表")
             return config_list

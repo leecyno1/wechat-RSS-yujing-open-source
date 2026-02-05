@@ -70,8 +70,14 @@ class MpsAppMsg(WxGather):
             begin = i * count
             params["begin"] = str(begin)
             print(f"第{i+1}页开始爬取\n")
-            # 随机暂停几秒，避免过快的请求导致过快的被查到
-            time.sleep(random.randint(0,interval))
+            # 随机暂停几秒，避免过快的请求导致过快的被查到（fast_mode 时跳过）
+            if not bool(getattr(self, "fast_mode", False)):
+                try:
+                    interval_i = max(0, int(interval or 0))
+                except Exception:
+                    interval_i = 0
+                if interval_i > 0:
+                    time.sleep(random.randint(0, interval_i))
             try:
                 headers = self.fix_header(url)
                 resp = session.get(url, headers=headers, params = params, verify=False)

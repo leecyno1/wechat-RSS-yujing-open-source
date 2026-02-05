@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from typing import Any
 import time
+import hashlib
 
 from core.config import cfg
 from core.db import DB
@@ -12,10 +13,32 @@ from core.print import print_error, print_info
 from .extract import compute_content_hash, extract_headings, extract_summary, html_to_text
 
 
+def _pick_shard_model(article_id: str, models: list[str]) -> str:
+    """Deterministically pick one model for an article (strategy A: shard by article)."""
+    models = [str(m).strip() for m in (models or []) if str(m).strip()]
+    if not models:
+        return ""
+    h = hashlib.sha256(str(article_id or "").encode("utf-8")).digest()
+    idx = int.from_bytes(h[:4], "big") % len(models)
+    return models[idx]
+
+
 class InsightsService:
     def __init__(self):
         self.provider = cfg.get("llm.provider", "siliconflow")
         self.model = cfg.get("llm.siliconflow.model", "")
+
+        # Optional sharding: spread articles across multiple configured models (same provider).
+        shard_enable = bool(cfg.get("llm.shard.enable", False))
+        shard_models_raw = str(cfg.get("llm.shard.models", "") or "")
+        self._shard_models = [m.strip() for m in shard_models_raw.split(",") if m.strip()]
+        self._shard_enable = shard_enable and bool(self._shard_models)
+
+    def _model_for_article(self, article_id: str) -> str:
+        if not self._shard_enable:
+            return self.model
+        picked = _pick_shard_model(article_id, self._shard_models)
+        return picked or self.model
 
     def ensure_cached(self, article_id: str) -> None:
         """Best-effort precompute & cache insights for better UX."""
@@ -114,9 +137,9 @@ class InsightsService:
         # Re-schedule a second pass so LLM steps run after the fetch stage.
         if fetched_content:
             try:
-                from core.queue import TaskQueue
+                from core.queue import InsightsQueue
 
-                TaskQueue.add_task(self.ensure_cached, article_id)
+                InsightsQueue.add_task(self.ensure_cached, article_id)
             except Exception:
                 pass
             return
@@ -168,14 +191,14 @@ class InsightsService:
             .all()
         )
         try:
-            from core.queue import TaskQueue
+            from core.queue import InsightsQueue
         except Exception:
-            TaskQueue = None
+            InsightsQueue = None
 
         for (aid,) in ids:
             try:
-                if TaskQueue:
-                    TaskQueue.add_task(self.ensure_cached, str(aid))
+                if InsightsQueue:
+                    InsightsQueue.add_task(self.ensure_cached, str(aid))
                 else:
                     self.ensure_cached(str(aid))
             except Exception:
@@ -326,7 +349,7 @@ class InsightsService:
             insight.status = 1
             insight.error = ""
             insight.llm_provider = self.provider
-            insight.llm_model = self.model
+            insight.llm_model = self._model_for_article(article_id) or self.model
 
             session.add(insight)
             session.commit()
@@ -361,7 +384,7 @@ class InsightsService:
         # If LLM not configured, still persist a deterministic fallback so UI has data.
         api_key = cfg.get("llm.siliconflow.api_key", "")
         api_url = cfg.get("llm.siliconflow.api_url", "")
-        model = cfg.get("llm.siliconflow.model", "")
+        model = self._model_for_article(article_id)
         if not (api_key and api_url and model):
             data = self._fallback_key_points(insight)
             insight.key_points_json = json.dumps(data, ensure_ascii=False)
@@ -462,7 +485,7 @@ class InsightsService:
 
         api_key = cfg.get("llm.siliconflow.api_key", "")
         api_url = cfg.get("llm.siliconflow.api_url", "")
-        model = cfg.get("llm.siliconflow.model", "")
+        model = self._model_for_article(article_id)
         if not (api_key and api_url and model):
             insight.status = 9
             insight.error = "LLM not configured; set SILICONFLOW_API_KEY / SILICONFLOW_API_URL / SILICONFLOW_MODEL."
@@ -521,7 +544,7 @@ class InsightsService:
 
         insight.updated_at = datetime.now()
         insight.llm_provider = self.provider
-        insight.llm_model = cfg.get("llm.siliconflow.model", "")
+        insight.llm_model = model
         session.add(insight)
         session.commit()
         session.refresh(insight)

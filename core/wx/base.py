@@ -10,7 +10,7 @@ from core.print import print_error,print_info, print_warning
 from core.rss import RSS
 from driver.success import setStatus
 from driver.wxarticle import Web
-from core.wait import Wait
+from core.wait import Wait as LegacyWait
 import random
 # 定义一些常见的 User-Agent
 USER_AGENTS = [
@@ -37,8 +37,7 @@ USER_AGENTS = [
 ]
 # 定义基类
 class WxGather:
-    articles=[]
-    aids=[]
+    # NOTE: keep per-instance state; class-level lists break concurrency (cross-feed de-dup & races).
     def all_count(self):
         if getattr(self, 'articles', None) is not None:
             return len(self.articles)
@@ -66,6 +65,7 @@ class WxGather:
         return wx
     def __init__(self,is_add:bool=False):
         self.articles=[]
+        self.aids=[]
         self.is_add=is_add
         self._cookies={}
         self.start_time = None  # 记录开始时间
@@ -115,7 +115,10 @@ class WxGather:
             pass
         return text
     def Wait(self,min=10,max=60,tips:str=""):
-        wait=random.randint(min,max)
+        # Fast mode: avoid deliberate sleeps (used for manual/auto refresh).
+        if bool(getattr(self, "fast_mode", False)):
+            return
+        wait = random.randint(min, max)
         print_warning(f"{tips}等待{wait}秒后重试...")
         time.sleep(wait)
 
@@ -140,7 +143,14 @@ class WxGather:
                     art["ext"]=Ext_Data
                     # art.pop("content")
                     self.articles.append(art)
-                Wait(min=1,max=5,tips=f"获取 {data['title']}...")
+                # Avoid per-article sleeps when fast mode is enabled.
+                if bool(getattr(self, "fast_mode", False)):
+                    return
+                try:
+                    LegacyWait(min=1, max=5, tips=f"获取 {data['title']}...")
+                except Exception:
+                    # Fallback to instance wait
+                    self.Wait(min=1, max=5, tips=f"获取 {data.get('title','')}...")
 
     #通过公众号码平台接口查询公众号
     def search_Biz(self,kw:str="",limit=10,offset=0):
@@ -205,7 +215,7 @@ class WxGather:
         _cookies.append({'name':'token','value':self.token})
         if CallBack is not None:
             CallBack(item)
-        self.Wait(tips=f"{item['mps_title']} 处理完成",min=3,max=10)
+        self.Wait(tips=f"{item['mps_title']} 处理完成", min=3, max=10)
         pass
     def Error(self,error:str,code=None):
         self.Over()
@@ -213,8 +223,15 @@ class WxGather:
             from jobs.failauth import send_wx_code
             import threading
             setStatus(False)
-            from core.queue import TaskQueue
-            TaskQueue.clear_queue()
+            from core.queue import InsightsQueue, TaskQueue
+            try:
+                TaskQueue.clear_queue()
+            except Exception:
+                pass
+            try:
+                InsightsQueue.clear_queue()
+            except Exception:
+                pass
             threading.Thread(target=send_wx_code,args=(f"公众号平台登录失效,请重新登录",)).start()
             # send_wx_code(f"公众号平台登录失效,请重新登录")
             raise Exception(error)

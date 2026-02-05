@@ -184,9 +184,9 @@ class Db:
                         or cfg.get("insights.auto_key_points", True)
                         or cfg.get("insights.auto_llm_breakdown", False)
                     ):
-                        from core.queue import TaskQueue
+                        from core.queue import InsightsQueue
                         from core.insights import InsightsService
-                        TaskQueue.add_task(InsightsService().ensure_cached, art.id)
+                        InsightsQueue.add_task(InsightsService().ensure_cached, art.id)
                 except Exception:
                     pass
 

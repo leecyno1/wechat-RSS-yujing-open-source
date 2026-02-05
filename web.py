@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel
 from fastapi.openapi.models import OAuthFlowPassword
@@ -113,6 +114,23 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 from core.res.avatar import files_dir
 app.mount("/files", StaticFiles(directory=files_dir), name="files")
 # app.mount("/docs", StaticFiles(directory="./data/docs"), name="docs")
+
+# Some ingress / load balancers use HEAD probes. FastAPI routes do not always auto-add HEAD,
+# so we provide explicit lightweight endpoints to avoid 405 health-check failures.
+@app.get("/healthz", tags=["默认"], include_in_schema=False)
+async def healthz_get():
+    return {"ok": True, "version": VERSION}
+
+
+@app.head("/healthz", tags=["默认"], include_in_schema=False)
+async def healthz_head():
+    return Response(status_code=200)
+
+
+@app.head("/", tags=["默认"], include_in_schema=False)
+async def head_root():
+    return Response(status_code=200)
+
 @app.get("/{path:path}",tags=['默认'],include_in_schema=False)
 async def serve_vue_app(request: Request, path: str):
     """处理Vue应用路由"""

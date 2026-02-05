@@ -10,6 +10,14 @@ from core.config import cfg
 router = APIRouter(prefix="/configs", tags=["配置管理"])
 
 
+def _require_admin(current_user: dict) -> None:
+    role = str((current_user or {}).get("role") or "")
+    username = str((current_user or {}).get("username") or "")
+    if role == "admin" or username == "admin":
+        return
+    raise HTTPException(status_code=403, detail=error_response(code=40301, message="仅管理员可访问配置管理"))
+
+
 @router.get("",summary="获取配置项列表")
 def list_configs(
     limit: int = Query(10, ge=1, le=100),
@@ -19,6 +27,7 @@ def list_configs(
     # db=DB.get_session()
     """获取配置项列表"""
     try:
+        _require_admin(current_user)
         # total = db.query(ConfigManagement).count()
         # configs = db.query(ConfigManagement).offset(offset).limit(limit).all()
         from core.yaml_db import YamlDB
@@ -40,13 +49,17 @@ def get_config(
     config_key: str,
     current_user: dict = Depends(get_current_user)
 ):
-    db=DB.get_session()
     """获取单个配置项详情"""
     try:
-        config = db.query(ConfigManagement).filter(ConfigManagement.config_key == config_key).first()
-        if not config:
-            raise HTTPException(status_code=404, detail="Config not found")
-        return success_response(data=config)
+        _require_admin(current_user)
+        val = cfg.get(config_key, None)
+        return success_response(
+            data=ConfigManagement(
+                config_key=config_key,
+                config_value=str(val) if val is not None else "",
+                description="系统配置项",
+            )
+        )
     except Exception as e:
         return error_response(code=500, message=str(e))
 
@@ -60,25 +73,18 @@ def create_config(
     config_data: ConfigManagementCreate = Body(...),
     current_user: dict = Depends(get_current_user)
 ):
-    db=DB.get_session()
     """创建配置项"""
     try:
-        # 检查config_key是否已存在
-        existing_config = db.query(ConfigManagement).filter(ConfigManagement.config_key == config_data.config_key).first()
-        if existing_config:
-            raise HTTPException(status_code=400, detail="Config with this key already exists")
-        
-        db_config = ConfigManagement(
-            config_key=config_data.config_key,
-            config_value=config_data.config_value,
-            description=config_data.description
+        _require_admin(current_user)
+        cfg.set_path(config_data.config_key, config_data.config_value)
+        return success_response(
+            data=ConfigManagement(
+                config_key=config_data.config_key,
+                config_value=str(cfg.get(config_data.config_key, "")),
+                description=config_data.description,
+            )
         )
-        db.add(db_config)
-        db.commit()
-        db.refresh(db_config)
-        return success_response(data=db_config)
     except Exception as e:
-        db.rollback()
         return error_response(code=500, message=str(e))
 
 @router.put("/{config_key}", summary="更新配置项")
@@ -87,23 +93,19 @@ def update_config(
     config_data: ConfigManagementCreate = Body(...),
     current_user: dict = Depends(get_current_user)
 ):
-    db=DB.get_session()
     """更新配置项"""
     try:
-        db_config = db.query(ConfigManagement).filter(ConfigManagement.config_key == config_key).first()
-        if not db_config:
-            raise HTTPException(status_code=404, detail="Config not found")
-        
+        _require_admin(current_user)
         if config_data.config_value is not None:
-            db_config.config_value = config_data.config_value
-        if config_data.description is not None:
-            db_config.description = config_data.description
-        
-        db.commit()
-        db.refresh(db_config)
-        return success_response(data=db_config)
+            cfg.set_path(config_key, config_data.config_value)
+        return success_response(
+            data=ConfigManagement(
+                config_key=config_key,
+                config_value=str(cfg.get(config_key, "")),
+                description=config_data.description,
+            )
+        )
     except Exception as e:
-        db.rollback()
         return error_response(code=500, message=str(e))
 
 @router.delete("/{config_key}",summary="删除配置项")
@@ -111,16 +113,10 @@ def delete_config(
     config_key: str,
     current_user: dict = Depends(get_current_user)
 ):
-    db=DB.get_session()
     """删除配置项"""
     try:
-        db_config = db.query(ConfigManagement).filter(ConfigManagement.config_key == config_key).first()
-        if not db_config:
-            raise HTTPException(status_code=404, detail="Config not found")
-        
-        db.delete(db_config)
-        db.commit()
-        return success_response(message="Config deleted successfully")
+        _require_admin(current_user)
+        cfg.delete_path(config_key)
+        return success_response(message="Config override deleted successfully")
     except Exception as e:
-        db.rollback()
         return error_response(code=500, message=str(e))

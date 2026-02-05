@@ -20,7 +20,7 @@ from core.models.user import User as DBUser
 from core.models.user_bind_code import UserBindCode
 from core.models.user_message_outbox import UserMessageOutbox
 from core.models.user_wechat_binding import UserWechatBinding
-from core.queue import TaskQueue
+from core.queue import InsightsQueue
 from core.wechat_official import WeChatOfficialClient
 
 
@@ -180,7 +180,7 @@ async def service_get_article(
             missing_kp = bool(cfg.get("insights.auto_key_points", True)) and not (getattr(insight, "key_points_json", None) or "")
             missing_bd = bool(cfg.get("insights.auto_llm_breakdown", False)) and include_llm and not (getattr(insight, "llm_breakdown_json", None) or "")
             if missing_kp or missing_bd:
-                TaskQueue.add_task(service.ensure_cached, article_id)
+                InsightsQueue.add_task(service.ensure_cached, article_id)
         except Exception:
             pass
 

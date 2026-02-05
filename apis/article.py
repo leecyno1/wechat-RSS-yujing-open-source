@@ -12,7 +12,7 @@ from apis.base import format_search_kw
 from core.print import print_warning, print_info, print_error, print_success
 from core.insights import InsightsService
 from driver.wxarticle import WXArticleFetcher
-from core.queue import TaskQueue
+from core.queue import InsightsQueue
 from core.models.user_article_state import UserArticleState
 router = APIRouter(prefix=f"/articles", tags=["文章管理"])
 
@@ -268,7 +268,7 @@ async def fetch_article_content(
 
         # Background: fill key points / breakdown (best-effort) after content is available.
         try:
-            TaskQueue.add_task(service.ensure_cached, article_id)
+            InsightsQueue.add_task(service.ensure_cached, article_id)
         except Exception:
             pass
 

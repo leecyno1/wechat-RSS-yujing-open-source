@@ -11,6 +11,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response, status as fast_status
 from sqlalchemy import func, or_
 
+from apis.base import error_response, success_response
 from core.config import cfg
 from core.db import DB
 from core.digest import DigestService
@@ -38,6 +39,9 @@ def _cfg_str(key: str) -> str:
         "wechat_official.token": "WECHAT_OFFICIAL_TOKEN",
         "wechat_official.encoding_aes_key": "WECHAT_OFFICIAL_ENCODING_AES_KEY",
         "wechat_official.bridge_token": "WECHAT_OFFICIAL_BRIDGE_TOKEN",
+        "wechat_official.menu.digest_key": "WECHAT_OFFICIAL_MENU_DIGEST_KEY",
+        "wechat_official.menu.history_key": "WECHAT_OFFICIAL_MENU_HISTORY_KEY",
+        "wechat_official.menu.help_key": "WECHAT_OFFICIAL_MENU_HELP_KEY",
     }
     env_key = env_map.get(key)
     if not env_key:
@@ -72,6 +76,10 @@ def _menu_digest_key() -> str:
     return _cfg_str("wechat_official.menu.digest_key") or "DIGEST_TODAY"
 
 
+def _menu_history_key() -> str:
+    return _cfg_str("wechat_official.menu.history_key") or "HISTORY"
+
+
 def _mask_openid(v: str) -> str:
     s = str(v or "").strip()
     if not s:
@@ -79,6 +87,67 @@ def _mask_openid(v: str) -> str:
     if len(s) <= 10:
         return s[:2] + "***"
     return s[:4] + "***" + s[-4:]
+
+
+def _menu_help_key() -> str:
+    return _cfg_str("wechat_official.menu.help_key") or "HELP"
+
+
+def _build_default_menu() -> dict[str, object]:
+    return {
+        "button": [
+            {"type": "click", "name": "订阅推送", "key": _menu_digest_key()},
+            {"type": "click", "name": "往期文章", "key": _menu_history_key()},
+            {"type": "click", "name": "绑定/帮助", "key": _menu_help_key()},
+        ]
+    }
+
+
+def _parse_wechat_invalid_ip(err: Exception) -> dict[str, str]:
+    s = str(err or "")
+    out: dict[str, str] = {"ipv4": "", "ipv6": ""}
+    try:
+        m4 = re.search(r"invalid ip\s+([0-9.]+)", s)
+        if m4:
+            out["ipv4"] = str(m4.group(1) or "")
+        m6 = re.search(r"ipv6\s+([^,\s]+)", s)
+        if m6:
+            out["ipv6"] = str(m6.group(1) or "")
+    except Exception:
+        pass
+    return out
+
+
+@router.post("/menu/sync", summary="创建/更新公众号自定义菜单（订阅推送）")
+async def wechat_official_menu_sync(
+    token: str | None = Query(None, description="Bridge token (WECHAT_OFFICIAL_BRIDGE_TOKEN)"),
+):
+    """Sync Official Account custom menu via WeChat API."""
+    _require_bridge_token(token)
+    menu = _build_default_menu()
+    try:
+        resp = WeChatOfficialClient().create_menu(menu)
+        return success_response(data={"menu": menu, "resp": resp})
+    except Exception as e:
+        ip = _parse_wechat_invalid_ip(e)
+        return error_response(code=50061, message=f"公众号菜单更新失败：{e}", data=ip)
+
+
+@router.get("/diagnose/whitelist_ip", summary="诊断公众号IP白名单（返回微信识别的出口IP）")
+async def wechat_official_diagnose_whitelist_ip(
+    token: str | None = Query(None, description="Bridge token (WECHAT_OFFICIAL_BRIDGE_TOKEN)"),
+):
+    """Try fetching access_token to discover the exact egress IP WeChat sees.
+
+    If IP isn't whitelisted, WeChat responds with 40164 and includes the IP in errmsg.
+    """
+    _require_bridge_token(token)
+    try:
+        WeChatOfficialClient().get_access_token(force_refresh=True)
+        return success_response(data={"ok": True, "message": "access_token_ok (whitelist seems configured)"})
+    except Exception as e:
+        ip = _parse_wechat_invalid_ip(e)
+        return success_response(data={"ok": False, "error": str(e), **ip})
 
 
 def _send_text(openid: str, text: str) -> None:
@@ -324,6 +393,103 @@ def _handle_click_digest(openid: str) -> None:
         _send_text(str(openid or "").strip(), text)
 
 
+def _build_click_history_reply_text(openid: str) -> str:
+    openid_s = str(openid or "").strip()
+    if not openid_s:
+        return ""
+
+    session = DB.get_session()
+    try:
+        binding = (
+            session.query(UserWechatBinding)
+            .filter(UserWechatBinding.wechat_openid == openid_s)
+            .filter(UserWechatBinding.is_active == 1)
+            .first()
+        )
+        user_id = str(getattr(binding, "user_id", "") or "") if binding else ""
+
+        feed_ids: list[str] = []
+        if user_id:
+            rows = session.query(UserSubscription.feed_id).filter(UserSubscription.user_id == user_id).all()
+            feed_ids = [str(r[0] or "").strip() for r in rows if r and str(r[0] or "").strip()]
+
+        base_q = (
+            session.query(Article, Feed)
+            .join(Feed, Feed.id == Article.mp_id)
+            .filter(Article.status != 1000)
+            .filter(Article.url.isnot(None))
+            .filter(Article.url != "")
+        )
+        if feed_ids:
+            base_q = base_q.filter(Article.mp_id.in_(feed_ids))
+
+        top_rows = (
+            base_q.order_by(
+                func.coalesce(Article.read_count, 0).desc(),
+                func.coalesce(Article.like_count, 0).desc(),
+                func.coalesce(Article.publish_time, 0).desc(),
+            )
+            .limit(2)
+            .all()
+        )
+        latest_rows = base_q.order_by(func.coalesce(Article.publish_time, 0).desc()).limit(2).all()
+
+        top_items: list[dict] = []
+        for art, feed in top_rows:
+            top_items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
+
+        latest_items: list[dict] = []
+        for art, feed in latest_rows:
+            latest_items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
+
+        lines: list[str] = ["【Dr.Lemon订阅助手】往期文章"]
+
+        if top_items:
+            lines.append("")
+            lines.append("【浏览量最高·2篇】")
+            for i, it in enumerate(top_items, start=1):
+                t = str(it.get("title") or "").strip()
+                u = str(it.get("url") or "").strip()
+                mp = str(it.get("mp") or "").strip()
+                lines.append(f"{i}. {t}" + (f"（{mp}）" if mp else ""))
+                if u:
+                    lines.append(u)
+
+        if latest_items:
+            lines.append("")
+            lines.append("【最新发布·2篇】")
+            for i, it in enumerate(latest_items, start=1):
+                t = str(it.get("title") or "").strip()
+                u = str(it.get("url") or "").strip()
+                mp = str(it.get("mp") or "").strip()
+                lines.append(f"{i}. {t}" + (f"（{mp}）" if mp else ""))
+                if u:
+                    lines.append(u)
+
+        if not (top_items or latest_items):
+            return "【Dr.Lemon订阅助手】暂无可推荐文章。"
+
+        if not user_id:
+            lines.append("")
+            lines.append("想要按你的订阅个性化：请先到网站绑定账号并订阅公众号。")
+        elif not feed_ids:
+            lines.append("")
+            lines.append("你还没有订阅任何公众号：先去网站添加订阅后再试。")
+
+        return "\n".join([x for x in lines if x is not None]).strip()[:1800]
+    finally:
+        try:
+            session.close()
+        except Exception:
+            pass
+
+
+def _handle_click_history(openid: str) -> None:
+    text = _build_click_history_reply_text(openid)
+    if text:
+        _send_text(str(openid or "").strip(), text)
+
+
 def _is_help_query(text: str) -> bool:
     s = str(text or "").strip()
     if not s:
@@ -340,6 +506,23 @@ def _is_latest_query(text: str) -> bool:
     if not s:
         return False
     keys = ["最新", "今天", "今日", "刚刚", "近期", "最近", "新文章"]
+    return any(k in s for k in keys)
+
+
+def _is_digest_query(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s:
+        return False
+    # Text fallback for menu click (since some bridges only forward text messages).
+    keys = ["订阅推送", "今日推送", "今日精选", "今日合集", "每日推送", "日报", "合集", "digest"]
+    return any(k in s for k in keys)
+
+
+def _is_history_query(text: str) -> bool:
+    s = str(text or "").strip()
+    if not s:
+        return False
+    keys = ["往期文章", "历史文章", "历史", "回顾", "往期", "history"]
     return any(k in s for k in keys)
 
 
@@ -395,6 +578,11 @@ def _build_text_query_reply_text(openid: str, content: str) -> str:
             "绑定后：点击菜单【订阅推送】可获取今日精选+摘要。\n"
             "也可直接发关键词（如“AI”“芯片”“投资”），我会为你推荐相关文章。"
         )
+
+    if _is_digest_query(qraw):
+        return _build_click_digest_reply_text(openid_s)
+    if _is_history_query(qraw):
+        return _build_click_history_reply_text(openid_s)
 
     session = DB.get_session()
     try:
@@ -503,6 +691,10 @@ def _build_reply_text_from_msg(msg: dict[str, str]) -> str:
         if event == "CLICK":
             if event_key == _menu_digest_key():
                 return _build_click_digest_reply_text(openid)
+            if event_key == _menu_history_key():
+                return _build_click_history_reply_text(openid)
+            if event_key == _menu_help_key():
+                return _build_text_query_reply_text(openid, "帮助")
             return ""
         if event in ("SUBSCRIBE", "SCAN"):
             # Parameterized QRCode: SUBSCRIBE has EventKey "qrscene_xxx", SCAN has "xxx".

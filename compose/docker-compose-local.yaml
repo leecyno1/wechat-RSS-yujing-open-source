@@ -26,3 +26,11 @@ services:
       # LLM/洞察开关统一放到 compose/.env.local（本地文件，已加入 .gitignore）
     volumes:
       - ../data:/app/data
+    networks:
+      - default
+      # Reuse LangBot's docker network so LangBot plugins can call `http://we-mp-rss:8001` directly.
+      - docker_langbot_network
+
+networks:
+  docker_langbot_network:
+    external: true
