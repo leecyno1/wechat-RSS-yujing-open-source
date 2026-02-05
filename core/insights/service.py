@@ -570,7 +570,7 @@ class InsightsService:
         provider, api_url, api_key, model = self._llm_profile_params(article_id)
         if not (api_key and api_url and model):
             insight.status = 9
-            insight.error = "LLM not configured; set SILICONFLOW_API_KEY / SILICONFLOW_API_URL / SILICONFLOW_MODEL."
+            insight.error = "LLM not configured; set llm.shard.profiles_json (recommended) or llm.siliconflow.api_key/api_url/model."
             insight.updated_at = datetime.now()
             insight.llm_provider = provider or self.provider
             insight.llm_model = model
