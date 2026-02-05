@@ -26,3 +26,6 @@ compose/.env
 compose/.env.*
 environment.sh
 .DS_Store
+.worktrees/
+docs/plans.bak.*/
+tests.bak.*/

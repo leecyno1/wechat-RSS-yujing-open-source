@@ -139,7 +139,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,wechat_official.bridge_token,langbot.webhook_token}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,llm.shard.profiles_json,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,wechat_official.bridge_token,langbot.webhook_token}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:
@@ -189,8 +189,12 @@ llm:
   # 多模型分流（策略A：按文章分配模型；单篇只跑一个模型）
   shard:
     enable: ${LLM_SHARD_ENABLE:-False}
-    # 逗号分隔：例如 "Qwen/Qwen3-30B-A3B,deepseek-ai/DeepSeek-V3"
+    # 逗号分隔：例如 "Qwen/Qwen3-30B-A3B,deepseek-ai/DeepSeek-V3"（兼容旧配置）
     models: ${LLM_SHARD_MODELS:-}
+    # 推荐：多 provider 并行（OpenAI 兼容 /chat/completions）
+    # JSON 数组字符串，例如：
+    # [{"name":"sf1","provider":"siliconflow","api_url":"https://api.siliconflow.cn/v1","api_key":"sk-xxx","model":"Qwen/Qwen3-30B-A3B"}]
+    profiles_json: ${LLM_SHARD_PROFILES_JSON:-}
   siliconflow:
     api_url: ${SILICONFLOW_API_URL:-https://api.siliconflow.cn/v1}
     api_key: ${SILICONFLOW_API_KEY:-}

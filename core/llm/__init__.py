@@ -1,1 +1,2 @@
 from .siliconflow import siliconflow_chat_json, siliconflow_chat_text
+from .openai_compat import openai_compat_chat_json, openai_compat_chat_text
