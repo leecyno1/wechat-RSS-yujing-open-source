@@ -11,7 +11,7 @@ from core.models.article import Article
 from core.models.feed import Feed
 from core.models.article_insight import ArticleInsight
 from core.insights.extract import html_to_text
-from core.queue import TaskQueue
+from core.queue import InsightsQueue
 
 
 router = APIRouter(prefix="/public", tags=["公开"])
@@ -187,7 +187,7 @@ async def get_public_insights(article_id: str):
         auto_kp = bool(cfg.get("insights.auto_key_points", True))
         auto_bd = bool(cfg.get("insights.auto_llm_breakdown", False))
         if (auto_kp and not (getattr(insight, "key_points_json", None) or "")) or (auto_bd and not (getattr(insight, "llm_breakdown_json", None) or "")):
-            TaskQueue.add_task(service.ensure_cached, article_id)
+            InsightsQueue.add_task(service.ensure_cached, article_id)
     except Exception:
         pass
 

@@ -12,8 +12,8 @@ server:
    enable_job: ${ENABLE_JOB:-True}
    #代码修改自动重启服务，默认为False
    auto_reload: ${AUTO_RELOAD:-False}
-   #最大线程数 默认2个线程，不建议超过4个线程
-   threads: ${THREADS:-2}
+   # uvicorn workers（进程数）。本项目使用内置任务队列并发，建议保持 1，避免多进程导致队列/定时任务重复。
+   threads: ${THREADS:-1}
    #通过web方式授权二维码 默认False 
    auth_web: ${WERSS_AUTH_WEB:-False}
 
@@ -134,6 +134,8 @@ gather:
   clean_html: ${GATHER.CLEAN_HTML:-False}
   #浏览器类型 默认firefox 允许值 firefox/edge/webkit
   browser_type: ${BROWSER_TYPE:-firefox}
+  # 增量更新的“容错窗口”(秒)：避免临界时间点漏抓
+  incremental_grace_seconds: ${GATHER_INCREMENTAL_GRACE_SECONDS:-3600}
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
@@ -184,6 +186,11 @@ llm:
   # 限制输入长度(字符)，避免超长文章导致超时/成本过高
   max_chars: ${LLM_MAX_CHARS:-24000}
   timeout: ${LLM_TIMEOUT:-60}
+  # 多模型分流（策略A：按文章分配模型；单篇只跑一个模型）
+  shard:
+    enable: ${LLM_SHARD_ENABLE:-False}
+    # 逗号分隔：例如 "Qwen/Qwen3-30B-A3B,deepseek-ai/DeepSeek-V3"
+    models: ${LLM_SHARD_MODELS:-}
   siliconflow:
     api_url: ${SILICONFLOW_API_URL:-https://api.siliconflow.cn/v1}
     api_key: ${SILICONFLOW_API_KEY:-}

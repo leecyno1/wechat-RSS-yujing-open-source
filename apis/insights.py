@@ -8,7 +8,7 @@ from core.auth import get_current_user
 from core.db import DB
 from core.insights import InsightsService
 from core.models.article_insight import ArticleInsight
-from core.queue import TaskQueue
+from core.queue import InsightsQueue
 
 
 router = APIRouter(prefix="/insights", tags=["洞察"])
@@ -50,7 +50,7 @@ async def get_article_insights(
         missing_kp = auto_kp and not (getattr(insight, "key_points_json", None) or "")
         missing_bd = auto_bd and include_llm and not (getattr(insight, "llm_breakdown_json", None) or "")
         if missing_kp or missing_bd:
-            TaskQueue.add_task(service.ensure_cached, article_id)
+            InsightsQueue.add_task(service.ensure_cached, article_id)
     except Exception:
         pass
     data = _serialize_insight(insight)
@@ -149,7 +149,7 @@ async def batch_cache_insights(
     scheduled = 0
     for (aid,) in article_ids:
         try:
-            TaskQueue.add_task(service.ensure_cached, aid)
+            InsightsQueue.add_task(service.ensure_cached, aid)
             scheduled += 1
         except Exception:
             continue

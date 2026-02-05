@@ -1,130 +1,124 @@
+import gc
+import os
 import queue
 import threading
 import time
-import gc
-from typing import Callable, Any, Optional
-from core.print import print_error, print_info, print_warning, print_success
+from typing import Any, Callable
+
+from core.print import print_error, print_info, print_success, print_warning
+
+
+def _env_int(key: str, default: int) -> int:
+    try:
+        v = int(str(os.getenv(key, str(default))).strip() or default)
+        return v
+    except Exception:
+        return default
+
+
 class TaskQueueManager:
-    """任务队列管理器，用于管理和执行排队任务"""
-    
-    def __init__(self,maxsize=0,tag:str=""):
-        """初始化任务队列"""
-        self._queue = queue.Queue(maxsize=maxsize)
+    """In-process task queue with a small worker pool (threads).
+
+    Notes:
+    - This project runs under uvicorn; using multiple uvicorn workers (processes) will create
+      separate in-memory queues. Prefer uvicorn workers=1 and use queue workers for concurrency.
+    - Tasks should be idempotent and create their own DB sessions.
+    """
+
+    def __init__(self, maxsize: int = 0, *, tag: str = "", workers: int = 1):
+        self._queue: queue.Queue[tuple[Callable[..., Any], tuple[Any, ...], dict[str, Any]]] = queue.Queue(
+            maxsize=maxsize
+        )
         self._lock = threading.Lock()
         self._is_running = False
-        self.tag=tag
-        
+        self._threads: list[threading.Thread] = []
+
+        self.tag = tag
+        self.workers = max(1, int(workers or 1))
+
     def add_task(self, task: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-        """添加任务到队列
-        
-        Args:
-            task: 要执行的任务函数
-            *args: 任务函数的参数
-            **kwargs: 任务函数的关键字参数
-        """
-        with self._lock:
-            self._queue.put((task, args, kwargs))
-        print_success(f"{self.tag}队列任务添加成功\n")
-    def run_task_background(self)->None:
-        threading.Thread(target=self.run_tasks, daemon=True).start()  
-        print_warning("队列任务后台运行")
-    def run_tasks(self, timeout: float = 1.0) -> None:
-        """执行队列中的所有任务，并持续运行以接收新任务
-        
-        Args:
-            timeout: 等待新任务的超时时间(秒)
-        """
+        self._queue.put((task, args, kwargs))
+        print_success(f"{self.tag}队列任务添加成功")
+
+    def run_task_background(self) -> None:
+        """Start worker threads once (idempotent)."""
         with self._lock:
             if self._is_running:
                 return
             self._is_running = True
-            
-        try:
-            while self._is_running:
-                time.sleep(0.1)  # 避免过于频繁的任务获取 
-                try:
-                    # 阻塞获取任务，避免CPU空转
-                    task, args, kwargs = self._queue.get(timeout=timeout)
-                    
-                    try:
-                        # 记录任务开始时间
-                        start_time = time.time()
-                        task(*args, **kwargs)
-                        # 记录任务执行时间
-                        duration = time.time() - start_time
-                        print_info(f"\n任务执行完成，耗时: {duration:.2f}秒")
-                    except Exception as e:
-                        print_error(f"队列任务执行失败: {e}")
-                        # raise
-                    finally:
-                        # 确保任务完成标记和资源释放
-                        self._queue.task_done()
-                        # 强制垃圾回收
-                        gc.collect()
-                    
-                except queue.Empty:
-                    # 超时无任务，继续检查运行状态
-                    continue
-                    
-        finally:
-            # 确保停止状态设置和资源清理
+
+        for i in range(self.workers):
+            t = threading.Thread(target=self._worker_loop, daemon=True, name=f"TaskQueue[{self.tag}]#{i}")
+            t.start()
+            self._threads.append(t)
+        print_warning(f"{self.tag}队列任务后台运行 workers={self.workers}")
+
+    def _worker_loop(self, timeout: float = 0.5) -> None:
+        while True:
             with self._lock:
-                self._is_running = False
-            # 清理可能残留的资源
-            gc.collect()
-    
+                if not self._is_running:
+                    return
+            try:
+                task, args, kwargs = self._queue.get(timeout=timeout)
+            except queue.Empty:
+                continue
+
+            try:
+                start_time = time.time()
+                task(*args, **kwargs)
+                duration = time.time() - start_time
+                print_info(f"\n任务执行完成，耗时: {duration:.2f}秒")
+            except Exception as e:
+                print_error(f"队列任务执行失败: {e}")
+            finally:
+                self._queue.task_done()
+                gc.collect()
+
     def stop(self) -> None:
-        """停止任务执行"""
         with self._lock:
             self._is_running = False
-    
-    def get_queue_info(self) -> dict:
-        """
-        获取队列的当前状态信息
-        
-        返回:
-            dict: 包含队列信息的字典，包括:
-                - is_running: 队列是否正在运行
-                - pending_tasks: 等待执行的任务数量
-        """
+
+    def join(self, timeout: float | None = None) -> None:
+        """Block until all tasks are completed (or timeout)."""
+        start = time.monotonic()
+        while True:
+            if self._queue.unfinished_tasks == 0:  # type: ignore[attr-defined]
+                return
+            if timeout is not None and (time.monotonic() - start) > timeout:
+                raise TimeoutError(f"queue not drained: pending={self._queue.qsize()}")
+            time.sleep(0.05)
+
+    def get_queue_info(self) -> dict[str, Any]:
         with self._lock:
             return {
-                'is_running': self._is_running,
-                'pending_tasks': self._queue.qsize()
+                "tag": self.tag,
+                "workers": self.workers,
+                "is_running": self._is_running,
+                "pending_tasks": self._queue.qsize(),
             }
-            
+
     def clear_queue(self) -> None:
-        """清空队列中的所有任务"""
-        with self._lock:
-            while not self._queue.empty():
-                try:
-                    self._queue.get_nowait()
-                    self._queue.task_done()
-                except queue.Empty:
-                    break
-            print_success("队列已清空")
-            
+        cleared = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+                cleared += 1
+            except queue.Empty:
+                break
+        print_success(f"{self.tag}队列已清空: {cleared}")
+
     def delete_queue(self) -> None:
-        """删除队列(停止并清空所有任务)"""
-        with self._lock:
-            self._is_running = False
-            while not self._queue.empty():
-                try:
-                    self._queue.get_nowait()
-                    self._queue.task_done()
-                except queue.Empty:
-                    break
-            print_success("队列已删除")
-TaskQueue = TaskQueueManager(tag="默认队列")
+        self.stop()
+        self.clear_queue()
+        print_success(f"{self.tag}队列已删除")
+
+
+# Default queues
+TaskQueue = TaskQueueManager(tag="默认", workers=_env_int("QUEUE_WORKERS", 6))
+InsightsQueue = TaskQueueManager(tag="洞察", workers=_env_int("INSIGHTS_QUEUE_WORKERS", 3))
+
+# Start background workers by default for better UX (best-effort).
 TaskQueue.run_task_background()
-if __name__ == "__main__":
-    def task1():
-        print("执行任务1")
+InsightsQueue.run_task_background()
 
-    def task2(name):
-        print(f"执行任务2，参数: {name}")
-
-    manager = TaskQueueManager()
-    manager.add_task(task1)
-    manager.add_task(task2, "测试任务")
-    manager.run_tasks()  # 按顺序执行任务1和任务2

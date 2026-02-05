@@ -98,6 +98,7 @@ def _queue_update_feed(feed_id: str, start_page: int = 0, end_page: int = 1) -> 
     session2 = DB.get_session()
     try:
         from core.models.feed import Feed
+        from core.models.article import Article
         from core.wx import WxGather
         from core.insights import InsightsService
 
@@ -114,7 +115,29 @@ def _queue_update_feed(feed_id: str, start_page: int = 0, end_page: int = 1) -> 
         if should_skip:
             return
 
+        # Mark sync_time early to avoid duplicate concurrent refresh for the same feed.
+        try:
+            now_ts = int(time.time())
+            mp.sync_time = now_ts
+            mp.update_time = now_ts
+            session2.add(mp)
+            session2.commit()
+        except Exception:
+            session2.rollback()
+
+        # Incremental refresh: stop when reaching already-known publish_time (with grace window).
+        since_ts = None
+        try:
+            grace = int(cfg.get("gather.incremental_grace_seconds", 3600) or 3600)
+            last_ts = session2.query(func.max(Article.publish_time)).filter(Article.mp_id == mp.id).scalar() or 0
+            last_ts = int(last_ts or 0)
+            if last_ts > 0:
+                since_ts = max(0, last_ts - max(0, grace))
+        except Exception:
+            since_ts = None
+
         wx = WxGather().Model()
+        wx.fast_mode = True
         wx.get_Articles(
             biz,
             Mps_id=mp.id,
@@ -122,6 +145,8 @@ def _queue_update_feed(feed_id: str, start_page: int = 0, end_page: int = 1) -> 
             CallBack=UpdateArticle,
             start_page=max(0, int(start_page or 0)),
             MaxPage=max(1, int(end_page or 1)),
+            interval=0,
+            since_ts=since_ts,
         )
 
         try:
@@ -481,8 +506,30 @@ async def update_mps(
         def UpArt(mp):
             from core.wx import WxGather
             from core.insights import InsightsService
+            from core.models.article import Article
+            from core.db import DB as _DB
             wx=WxGather().Model()
-            wx.get_Articles(biz,Mps_id=mp.id,Mps_title=mp.mp_name,CallBack=UpdateArticle,start_page=start_page,MaxPage=end_page)
+            wx.fast_mode = True
+            since_ts = None
+            try:
+                grace = int(cfg.get("gather.incremental_grace_seconds", 3600) or 3600)
+                s2 = _DB.get_session()
+                last_ts = s2.query(func.max(Article.publish_time)).filter(Article.mp_id == mp.id).scalar() or 0
+                last_ts = int(last_ts or 0)
+                if last_ts > 0:
+                    since_ts = max(0, last_ts - max(0, grace))
+            except Exception:
+                since_ts = None
+            wx.get_Articles(
+                biz,
+                Mps_id=mp.id,
+                Mps_title=mp.mp_name,
+                CallBack=UpdateArticle,
+                start_page=start_page,
+                MaxPage=end_page,
+                interval=0,
+                since_ts=since_ts,
+            )
             result=wx.articles
             try:
                 if bool(cfg.get("insights.prewarm_on_update", True)):

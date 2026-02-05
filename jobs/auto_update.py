@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from core.config import cfg
@@ -9,6 +10,8 @@ from core.print import print_error, print_info, print_success, print_warning
 from core.queue import TaskQueue, TaskQueueManager
 from core.task import TaskScheduler
 from core.wx import WxGather
+from core.models.article import Article
+from sqlalchemy import func
 
 
 _AUTO_UPDATE_SCHEDULER = TaskScheduler()
@@ -30,8 +33,9 @@ def _update_one_feed(feed) -> None:
 
     max_page = int(cfg.get("auto_update.max_page", cfg.get("max_page", 1) or 1) or 1)
     max_page = max(1, min(50, max_page))
-    interval = int(cfg.get("interval", 10) or 10)
-    interval = max(1, min(60, interval))
+    # In auto updates we want speed; throttle is handled via WeChat backend limits
+    # and queue concurrency rather than per-item sleeps.
+    interval = 0
 
     changed_article_ids: list[str] = []
 
@@ -44,6 +48,25 @@ def _update_one_feed(feed) -> None:
         return ok
 
     wx = WxGather().Model()
+    wx.fast_mode = True
+
+    # Incremental refresh based on last seen publish_time (with grace window).
+    since_ts = None
+    try:
+        grace = int(cfg.get("gather.incremental_grace_seconds", 3600) or 3600)
+        s = DB.get_session()
+        last_ts = (
+            s.query(func.max(Article.publish_time))
+            .filter(Article.mp_id == str(getattr(feed, "id", "") or ""))
+            .scalar()
+            or 0
+        )
+        last_ts = int(last_ts or 0)
+        if last_ts > 0:
+            since_ts = max(0, last_ts - max(0, grace))
+    except Exception:
+        since_ts = None
+
     wx.get_Articles(
         faker_id,
         CallBack=_cb,
@@ -51,6 +74,7 @@ def _update_one_feed(feed) -> None:
         Mps_title=str(getattr(feed, "mp_name", "") or ""),
         MaxPage=max_page,
         interval=interval,
+        since_ts=since_ts,
     )
 
     if not changed_article_ids:
@@ -58,15 +82,19 @@ def _update_one_feed(feed) -> None:
 
     # After each update, ensure insights are (re)generated for changed articles.
     service = InsightsService()
+    try:
+        from core.queue import InsightsQueue
+    except Exception:
+        InsightsQueue = None
+
     for aid in changed_article_ids:
         try:
-            TaskQueue.add_task(service.ensure_cached, aid)
-        except Exception:
-            # Fallback to sync best-effort in the worker thread.
-            try:
+            if InsightsQueue:
+                InsightsQueue.add_task(service.ensure_cached, aid)
+            else:
                 service.ensure_cached(aid)
-            except Exception:
-                continue
+        except Exception:
+            continue
 
 
 def _run_full_update() -> None:
@@ -84,7 +112,11 @@ def _run_full_update() -> None:
 
     global _AUTO_UPDATE_QUEUE
     if _AUTO_UPDATE_QUEUE is None:
-        _AUTO_UPDATE_QUEUE = TaskQueueManager(tag="全量更新")
+        try:
+            workers = int(os.getenv("AUTO_UPDATE_WORKERS", "6") or "6")
+        except Exception:
+            workers = 6
+        _AUTO_UPDATE_QUEUE = TaskQueueManager(tag="全量更新", workers=max(1, workers))
         _AUTO_UPDATE_QUEUE.run_task_background()
 
     print_info(f"全量更新开始：共 {len(feeds)} 个公众号，MaxPage={cfg.get('auto_update.max_page', cfg.get('max_page', 1))}")
@@ -120,4 +152,3 @@ def start_auto_update() -> None:
 
     _AUTO_UPDATE_SCHEDULER.start()
     print_success(f"自动全量更新已启用：{cron_morning} / {cron_afternoon} / {cron_evening}")
-

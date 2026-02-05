@@ -555,12 +555,12 @@ async def backfill_mp_recent_pages(
             session.rollback()
 
     try:
-        from core.queue import TaskQueue
+        from core.queue import InsightsQueue
 
         if updated_article_ids:
             service = InsightsService()
             for aid in updated_article_ids[:500]:
-                TaskQueue.add_task(service.get_or_create_basic, aid)
+                InsightsQueue.add_task(service.get_or_create_basic, aid)
     except Exception:
         pass
 

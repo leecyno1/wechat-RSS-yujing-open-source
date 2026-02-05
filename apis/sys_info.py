@@ -13,6 +13,10 @@ from .base import success_response, error_response
 from driver.token import wx_cfg
 from core.config import cfg
 from jobs.mps import TaskQueue
+try:
+    from core.queue import InsightsQueue
+except Exception:
+    InsightsQueue = None
 from driver.success import getLoginInfo,getStatus
 from fastapi.responses import Response
 from io import BytesIO
@@ -172,7 +176,9 @@ async def system_resources(
     """
     try:
         resources_info=get_system_resources()
-        resources_info["queue"]=TaskQueue.get_queue_info(),
+        resources_info["queue"]=TaskQueue.get_queue_info()
+        if InsightsQueue:
+            resources_info["insights_queue"] = InsightsQueue.get_queue_info()
         return success_response(data=resources_info)
     except Exception as e:
         return error_response(
@@ -225,6 +231,7 @@ async def get_system_info(
             },
             "article": laxArticle(),
             'queue':TaskQueue.get_queue_info(),
+            'insights_queue': InsightsQueue.get_queue_info() if InsightsQueue else None,
         }
         return success_response(data=system_info)
     except Exception as e:

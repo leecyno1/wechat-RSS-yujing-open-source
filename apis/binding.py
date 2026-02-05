@@ -247,9 +247,24 @@ async def get_wechat_bind_qrcode(current_user: dict = Depends(get_current_user))
         if not ticket:
             raise RuntimeError("missing ticket")
         qrcode_url = WeChatOfficialClient().show_qrcode_url(ticket)
-        return success_response({"bind_code": _serialize_code(active_code, now), "qrcode_url": qrcode_url, "expires_in": expires_in})
+        return success_response(
+            {
+                "bind_code": _serialize_code(active_code, now),
+                "qrcode_url": qrcode_url,
+                "expires_in": expires_in,
+                "mode": "auto",
+            }
+        )
     except Exception as e:
-        raise HTTPException(
-            status_code=fast_status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=error_response(code=50311, message=f"公众号二维码生成失败：{e}"),
+        # Fallback: if WeChat API is blocked (e.g. egress IP not in whitelist), return a generic follow QR image.
+        # The user can still bind by sending the bind code to the official account.
+        return success_response(
+            {
+                "bind_code": _serialize_code(active_code, now),
+                "qrcode_url": "/api/v1/wx/sys/promo/qr?v=1",
+                "expires_in": expires_in,
+                "mode": "manual",
+                "warning": f"绑定二维码生成失败：{e}",
+            },
+            message="fallback_to_manual",
         )

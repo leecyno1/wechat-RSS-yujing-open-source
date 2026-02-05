@@ -29,7 +29,13 @@ if __name__ == '__main__':
         print_warning("未开启定时任务")
     print("启动服务器")
     AutoReload=cfg.get("server.auto_reload",False)
-    thread=cfg.get("server.threads",1)
+    thread=int(cfg.get("server.threads",1) or 1)
+    # IMPORTANT: this project uses in-process queues (thread workers). Running multiple uvicorn
+    # workers (processes) would create multiple independent queues and duplicate schedulers.
+    # Force workers=1 for correctness; scale refresh/insights via QUEUE_WORKERS instead.
+    if thread != 1:
+        print_warning(f"检测到 server.threads={thread}，将强制设置为 1（避免多进程导致队列/定时任务重复）")
+        thread = 1
     uvicorn.run("web:app", host="0.0.0.0", port=int(cfg.get("port",8001)),
             reload=AutoReload,
             reload_dirs=['.','core','apis','driver','jobs','tools','schemas'],
