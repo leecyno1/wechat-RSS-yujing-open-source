@@ -145,25 +145,48 @@ async def download_export_file(
     下载导出的文件
     """
     try:
-        file_path = f"./data/docs/{mp_id}/{filename}"
+        # 定义基础目录
+        base_dir = os.path.abspath("./data/docs")
         
-        if not os.path.exists(file_path):
+        # 构建并规范化路径
+        if mp_id:
+            target_path = os.path.join(base_dir, mp_id, filename)
+        else:
+            # 如果没有mp_id，可能是在根目录下或者是旧逻辑，视需求而定
+            # 这里为了安全起见，依然限制在 base_dir 下
+             target_path = os.path.join(base_dir, filename)
+
+        # 获取绝对路径
+        safe_path = os.path.abspath(target_path)
+
+        # 检查是否尝试跳出基础目录
+        if not safe_path.startswith(base_dir):
+            return error_response(403, "非法的文件路径请求")
+
+        if not os.path.exists(safe_path):
+             # 避免泄露文件存在信息，或者直接报404
             raise HTTPException(status_code=404, detail="文件不存在")
         
+        # 再次确认是文件而不是目录
+        if not os.path.isfile(safe_path):
+             raise HTTPException(status_code=404, detail="文件不存在")
+
         def cleanup_file():
             """后台任务：删除临时文件"""
             try:
-                if os.path.exists(file_path) and delete_after_download:
-                    os.remove(file_path)
+                if os.path.exists(safe_path) and delete_after_download:
+                    os.remove(safe_path)
             except Exception:
                 pass
         
         return FileResponse(
-            path=file_path,
+            path=safe_path,
             filename=filename,
             background=BackgroundTask(cleanup_file)
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         return error_response(500, f"下载失败: {str(e)}")
 

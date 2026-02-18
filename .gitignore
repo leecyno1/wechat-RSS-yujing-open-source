@@ -29,3 +29,5 @@ environment.sh
 .worktrees/
 docs/plans.bak.*/
 tests.bak.*/
+.venv
+.idea
