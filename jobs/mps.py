@@ -9,7 +9,6 @@ from core.models.feed import Feed
 from core.config import cfg,DEBUG
 from core.print import print_info,print_success,print_error
 from driver.wx import WX_API
-from driver.auth import *
 from driver.success import Success
 wx_db=db.Db(tag="任务调度")
 def fetch_all_article():
