@@ -16,6 +16,7 @@ class Feed(Base):
     faker_id = Column(String(255))
     # Source metadata (wechat | rss | rsshub). Existing rows default to wechat semantics.
     source_type = Column(String(32), default="wechat", index=True)
+    source_platform = Column(String(32), default="wechat", index=True)
     source_url = Column(String(1000), nullable=True)
     source_key = Column(String(255), nullable=True, index=True)
     source_config = Column(Text, nullable=True)

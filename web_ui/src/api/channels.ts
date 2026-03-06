@@ -5,6 +5,9 @@ export interface ChannelFeedItem {
   name: string
   cover: string
   intro: string
+  source_type?: string
+  source_platform?: string
+  source_url?: string
   created_at?: string | null
   unread_count: number
   article_count: number

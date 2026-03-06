@@ -42,7 +42,7 @@
         <a-spin :loading="channelsLoading">
           <div v-if="leftTab === 'feeds'" class="sider-list">
             <div class="sider-section">
-              <div class="section-title">已订阅频道</div>
+              <div class="section-title">{{ activePlatform === 'all' ? '已订阅频道' : `${platformLabel(activePlatform)} 订阅` }}</div>
               <a-select v-model="feedSort" size="small" style="width: 110px" @change="loadFeeds">
                 <a-option value="recent">最近更新</a-option>
                 <a-option value="created">创建时间</a-option>
@@ -55,13 +55,16 @@
                   <a-avatar :size="40" :image-url="AvatarAll">
                     <img :src="AvatarAll" />
                   </a-avatar>
-                  <div class="channel-name">全部订阅</div>
-                  <a-badge class="channel-badge" :count="feedsStats.unread_total" :max-count="99" />
+                  <div class="channel-main">
+                    <div class="channel-name">{{ allFeedsLabel }}</div>
+                    <div class="channel-platform">{{ activePlatformStats.feed_total }} 个订阅</div>
+                  </div>
+                  <a-badge class="channel-badge" :count="activePlatformStats.unread_total" :max-count="99" />
                 </div>
               </a-list-item>
 
               <a-list-item
-                v-for="c in channels"
+                v-for="c in filteredChannels"
                 :key="c.id"
                 class="channel-item"
                 :class="{ active: c.id === activeChannelId }"
@@ -71,7 +74,10 @@
                   <a-avatar :size="40" :image-url="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'">
                     <img :src="proxiedWeChatImg(c.cover) || '/static/default-avatar.png'" />
                   </a-avatar>
-                  <div class="channel-name">{{ c.name }}</div>
+                  <div class="channel-main">
+                    <div class="channel-name">{{ c.name }}</div>
+                    <div class="channel-platform">{{ platformLabel(feedPlatform(c)) }}</div>
+                  </div>
                   <a-badge class="channel-badge" :count="c.unread_count" :max-count="99" />
                 </div>
               </a-list-item>
@@ -98,6 +104,20 @@
       </a-layout-sider>
 
       <a-layout-content class="content">
+        <div class="platform-tabs">
+          <a-button
+            v-for="tab in platformTabs"
+            :key="tab.key"
+            class="platform-tab-btn"
+            size="small"
+            :type="activePlatform === tab.key ? 'primary' : 'outline'"
+            :status="activePlatform === tab.key ? 'warning' : undefined"
+            @click="setPlatform(tab.key)"
+          >
+            <span>{{ tab.label }}</span>
+            <span class="platform-tab-meta">{{ platformStats[tab.key]?.feed_total || 0 }}</span>
+          </a-button>
+        </div>
         <div class="toolbar">
           <div class="toolbar-left">
             <a-input v-model="articleKw" class="search-input" allow-clear placeholder="搜索关键词" @press-enter="loadArticles" />
@@ -153,6 +173,8 @@
                         <div class="article-subtitle">{{ excerpt(a.description) }}</div>
                         <div class="article-meta">
                           <span>{{ a.mp_name || activeChannelName }}</span>
+                          <span class="dot">·</span>
+                          <span>{{ platformLabel(articlePlatform(a)) }}</span>
                           <span class="dot">·</span>
                           <span>{{ formatRelative(a.publish_time) }}</span>
                           <span class="dot">·</span>
@@ -260,6 +282,7 @@ import {
 } from '@/api/channels'
 import { UpdateMps } from '@/api/subscription'
 import { listTags } from '@/api/tagManagement'
+import { refreshAllSourceFeeds, refreshSourceFeed } from '@/api/sources'
 
 const route = useRoute()
 	const router = useRouter()
@@ -298,6 +321,82 @@ let pollTimer: any = null
 
 const hasToken = computed(() => !!localStorage.getItem('token'))
 const baseUrl = computed(() => (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, ''))
+const activePlatform = ref<string>('all')
+
+const PLATFORM_LABELS: Record<string, string> = {
+  all: '全部平台',
+  wechat: '公众号',
+  zhihu: '知乎',
+  xueqiu: '雪球',
+  toutiao: '头条',
+  baijiahao: '百家号',
+  wsj: '华尔街日报',
+  bbc: 'BBC',
+  rsshub: 'RSSHub',
+  rss: 'RSS'
+}
+const PLATFORM_ORDER = ['wechat', 'zhihu', 'xueqiu', 'toutiao', 'baijiahao', 'wsj', 'bbc', 'rsshub', 'rss']
+
+const normalizePlatform = (value: string | undefined | null) => {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return ''
+  if (raw === 'wx') return 'wechat'
+  return raw
+}
+
+const feedPlatform = (feed: any) => {
+  const explicit = normalizePlatform(feed?.source_platform)
+  if (explicit) return explicit
+  const sourceType = String(feed?.source_type || '').toLowerCase()
+  if (sourceType === 'rsshub') return 'rsshub'
+  if (sourceType === 'rss') return 'rss'
+  return 'wechat'
+}
+
+const platformLabel = (platform: string) => PLATFORM_LABELS[platform] || platform.toUpperCase()
+
+const filteredChannels = computed(() => {
+  if (activePlatform.value === 'all') return channels.value
+  return channels.value.filter((x) => feedPlatform(x) === activePlatform.value)
+})
+
+const platformTabs = computed(() => {
+  const set = new Set<string>(['all'])
+  channels.value.forEach((x) => set.add(feedPlatform(x)))
+  const dynamic = Array.from(set).filter((x) => x !== 'all')
+  dynamic.sort((a, b) => {
+    const ia = PLATFORM_ORDER.indexOf(a)
+    const ib = PLATFORM_ORDER.indexOf(b)
+    if (ia >= 0 && ib >= 0) return ia - ib
+    if (ia >= 0) return -1
+    if (ib >= 0) return 1
+    return a.localeCompare(b)
+  })
+  return ['all', ...dynamic].map((key) => ({ key, label: platformLabel(key) }))
+})
+
+const platformStats = computed(() => {
+  const stats: Record<string, { feed_total: number; unread_total: number }> = {
+    all: { feed_total: channels.value.length, unread_total: feedsStats.value.unread_total || 0 }
+  }
+  for (const c of channels.value) {
+    const p = feedPlatform(c)
+    if (!stats[p]) stats[p] = { feed_total: 0, unread_total: 0 }
+    stats[p].feed_total += 1
+    stats[p].unread_total += Number(c.unread_count || 0)
+  }
+  return stats
+})
+
+const allFeedsLabel = computed(() => (activePlatform.value === 'all' ? '全部订阅' : `${platformLabel(activePlatform.value)} · 全部`))
+const activePlatformStats = computed(() => platformStats.value[activePlatform.value] || { feed_total: 0, unread_total: 0 })
+
+const articlePlatform = (article: any) => {
+  const fromArticle = normalizePlatform(String(article?.source_platform || ''))
+  if (fromArticle) return fromArticle
+  const feed = findFeedById(String(article?.mp_id || ''))
+  return feed ? feedPlatform(feed) : (activePlatform.value !== 'all' ? activePlatform.value : 'wechat')
+}
 
 const excerpt = (text: string) => {
   const t = (text || '').trim()
@@ -390,6 +489,37 @@ const normalizeTopicMpIds = (raw: any): string[] => {
   return []
 }
 
+const findFeedById = (id: string) => channels.value.find((x) => x.id === id)
+
+const isSourceFeed = (feed: ChannelFeedItem | undefined) => {
+  const st = String(feed?.source_type || '').toLowerCase()
+  return st === 'rss' || st === 'rsshub'
+}
+
+const setPlatform = async (platform: string, silent?: boolean) => {
+  const raw = String(platform || 'all').trim().toLowerCase()
+  activePlatform.value = raw === 'all' ? 'all' : (normalizePlatform(raw) || 'all')
+  if (leftTab.value !== 'feeds') {
+    leftTab.value = 'feeds'
+    activeTopic.value = null
+    activeTopicFeedIds.value = []
+  }
+  if (!silent) {
+    const query: any = { ...(route.query || {}) }
+    if (activePlatform.value === 'all') delete query.platform
+    else query.platform = activePlatform.value
+    router.replace({ path: '/channels', query }).catch(() => {})
+  }
+  if (activeChannelId.value === 'all') {
+    activeChannelName.value = allFeedsLabel.value
+  }
+  if (activeChannelId.value !== 'all' && !filteredChannels.value.some((x) => x.id === activeChannelId.value)) {
+    await selectChannel('all', true)
+  } else if (activeChannelId.value === 'all') {
+    await loadArticles({ background: true })
+  }
+}
+
 const showAllFeeds = async () => {
   activeTopic.value = null
   activeTopicFeedIds.value = []
@@ -398,6 +528,9 @@ const showAllFeeds = async () => {
     activeChannelId.value = lastFeedChannelId.value
   }
   await loadFeeds()
+  if (activeChannelId.value && activeChannelId.value !== 'all' && !filteredChannels.value.some((x) => x.id === activeChannelId.value)) {
+    activeChannelId.value = 'all'
+  }
   // If we restored a valid channel, refresh list immediately.
   if (activeChannelId.value) {
     await selectChannel(activeChannelId.value, true)
@@ -417,26 +550,43 @@ const showAllFeeds = async () => {
 	  const background = !!opts?.background
 	  if (background) channelsRefreshing.value = true
 	  else channelsLoading.value = true
-	  try {
-		    if (hasToken.value) {
-		      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
-		      channels.value = res.list || []
-		      feedsStats.value = res.stats || feedsStats.value
-		    } else {
-		      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
-		      channels.value = (res.list || []).map((c: any) => ({ ...c, unread_count: 0, article_count: 0, latest_publish_time: 0 }))
-		      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
-		    }
+		  try {
+			    if (hasToken.value) {
+			      const res: any = await getChannelFeeds({ kw: channelKw.value, limit: 200, offset: 0, sort: feedSort.value })
+			      channels.value = (res.list || []).map((x: any) => ({
+              ...x,
+              source_type: String(x?.source_type || 'wechat').toLowerCase(),
+              source_platform: normalizePlatform(String(x?.source_platform || ''))
+            }))
+			      feedsStats.value = res.stats || feedsStats.value
+			    } else {
+			      const res: any = await getPublicChannels({ kw: channelKw.value, limit: 200, offset: 0 })
+			      channels.value = (res.list || []).map((c: any) => ({
+              ...c,
+              source_type: String(c?.source_type || 'wechat').toLowerCase(),
+              source_platform: normalizePlatform(String(c?.source_platform || '')),
+              unread_count: 0,
+              article_count: 0,
+              latest_publish_time: 0
+            }))
+			      feedsStats.value = { unread_total: 0, article_total: 0, feed_total: channels.value.length }
+			    }
 
     if (!activeChannelId.value) {
       const q = (route.query.channel_id as string) || ''
       if (q && (q === 'all' || channels.value.some(c => c.id === q))) {
         selectChannel(q, true)
-      } else if (channels.value.length) {
-        selectChannel(channels.value[0].id, true)
+      } else if (filteredChannels.value.length) {
+        selectChannel(filteredChannels.value[0].id, true)
       }
+    } else if (activeChannelId.value !== 'all' && !channels.value.some((c) => c.id === activeChannelId.value)) {
+      activeChannelId.value = 'all'
+      await loadArticles({ background: true })
+    } else if (activeChannelId.value !== 'all' && !filteredChannels.value.some((c) => c.id === activeChannelId.value)) {
+      activeChannelId.value = 'all'
+      await loadArticles({ background: true })
     }
-	  } catch (e: any) {
+		  } catch (e: any) {
 	    if (!background) Message.error(e?.message || '加载频道失败')
 	  } finally {
 	    channelsLoading.value = false
@@ -448,6 +598,8 @@ const maybeAutoUpdateChannel = async (mpId: string) => {
   if (!hasToken.value) return
   const id = String(mpId || '').trim()
   if (!id || id === 'all') return
+  const feed = findFeedById(id)
+  if (!feed) return
 
   const last = autoUpdatedAt.get(id) || 0
   if (Date.now() - last < AUTO_UPDATE_MIN_INTERVAL_MS) return
@@ -455,8 +607,11 @@ const maybeAutoUpdateChannel = async (mpId: string) => {
 
   autoUpdateLoading.value = true
   try {
-    // Best-effort: trigger backend sync (non-blocking; backend does its own throttling).
-    await UpdateMps(id, { start_page: 0, end_page: 1 })
+    if (isSourceFeed(feed)) {
+      await refreshSourceFeed(id)
+    } else {
+      await UpdateMps(id, { start_page: 0, end_page: 1 })
+    }
   } catch {
     // ignore
   } finally {
@@ -488,9 +643,13 @@ const refreshAllSubscriptions = async () => {
   refreshAllLastAt.value = now
   refreshAllLoading.value = true
   try {
-    const res: any = await UpdateMps('all', { start_page: 0, end_page: 1 })
-    const queued = Number(res?.queued || 0)
-    Message.success(queued ? `已加入刷新队列（${queued} 个公众号）` : '已触发刷新')
+    const [wxRes, srcRes] = await Promise.allSettled([
+      UpdateMps('all', { start_page: 0, end_page: 1 }),
+      refreshAllSourceFeeds({ limit: 400 })
+    ])
+    const queued = wxRes.status === 'fulfilled' ? Number((wxRes.value as any)?.queued || 0) : 0
+    const sourceChanged = srcRes.status === 'fulfilled' ? Number((srcRes.value as any)?.changed_items || 0) : 0
+    Message.success(`刷新任务已触发（公众号队列 ${queued}，RSS新增 ${sourceChanged}）`)
   } catch (e: any) {
     Message.error(e?.message || String(e || '刷新失败'))
   } finally {
@@ -513,9 +672,12 @@ const loadArticles = async (opts?: { background?: boolean }) => {
   else articlesLoading.value = true
   try {
     if (hasToken.value) {
+      const platformFeedIds = !activeTopicFeedIds.value.length && activeChannelId.value === 'all' && activePlatform.value !== 'all'
+        ? filteredChannels.value.map((x) => x.id)
+        : []
       const res: any = await getChannelArticles({
-        mp_id: activeTopicFeedIds.value.length ? '' : activeChannelId.value === 'all' ? '' : activeChannelId.value,
-        mp_ids: activeTopicFeedIds.value.length ? activeTopicFeedIds.value : undefined,
+        mp_id: activeTopicFeedIds.value.length || platformFeedIds.length ? '' : activeChannelId.value === 'all' ? '' : activeChannelId.value,
+        mp_ids: activeTopicFeedIds.value.length ? activeTopicFeedIds.value : (platformFeedIds.length ? platformFeedIds : undefined),
         search: articleKw.value,
         limit: 80,
         offset: 0,
@@ -585,12 +747,15 @@ const selectChannel = async (id: string, silent?: boolean) => {
   if (id.startsWith('topic:')) {
     activeChannelName.value = activeTopic.value?.name || '频道'
   } else {
-    activeChannelName.value = id === 'all' ? '全部订阅' : ch?.name || ''
+    activeChannelName.value = id === 'all' ? allFeedsLabel.value : ch?.name || ''
+    if (id !== 'all' && ch) {
+      activePlatform.value = feedPlatform(ch)
+    }
   }
   if (!silent) {
     const query: any = id.startsWith('topic:')
       ? { topic_id: id.replace(/^topic:/, '') }
-      : { channel_id: id }
+      : { channel_id: id, ...(activePlatform.value !== 'all' ? { platform: activePlatform.value } : {}) }
     router.replace({ path: '/channels', query }).catch(() => {})
   }
   // Auto refresh newest articles on page refresh / channel switch.
@@ -710,6 +875,7 @@ const selectTopic = async (t: any, silent?: boolean) => {
   activeTopic.value = t
   activeTopicFeedIds.value = normalizeTopicMpIds(t?.mps_id)
   leftTab.value = 'topics'
+  activePlatform.value = 'all'
   await selectChannel(`topic:${String(t?.id || '')}`, !!silent)
 }
 
@@ -720,6 +886,17 @@ watch(
       if (val === 'all' || channels.value.some(c => c.id === val)) {
         selectChannel(val, true)
       }
+    }
+  }
+)
+
+watch(
+  () => route.query.platform,
+  (val: any) => {
+    const next = String(val || '').trim().toLowerCase()
+    const normalized = next ? (normalizePlatform(next) || 'all') : 'all'
+    if (normalized !== activePlatform.value && leftTab.value === 'feeds') {
+      setPlatform(normalized, true)
     }
   }
 )
@@ -736,6 +913,10 @@ watch(
 onMounted(async () => {
   const q = (route.query.channel_id as string) || ''
   if (q) activeChannelId.value = q
+  const platformQ = String((route.query.platform as string) || '').trim().toLowerCase()
+  if (platformQ) {
+    activePlatform.value = normalizePlatform(platformQ) || 'all'
+  }
   await loadTopics()
   await loadFeeds()
 
@@ -915,6 +1096,19 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   flex: 1;
 }
+.channel-main {
+  min-width: 0;
+  flex: 1;
+}
+.channel-platform {
+  color: var(--color-text-3);
+  font-size: 11px;
+  line-height: 1.2;
+  margin-top: -1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .channel-item :deep(.arco-badge-number) {
   font-size: 12px;
   line-height: 18px;
@@ -934,6 +1128,27 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.platform-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+.platform-tab-btn {
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.platform-tab-meta {
+  color: var(--color-text-3);
+  font-size: 11px;
+}
+.platform-tab-btn.arco-btn-primary .platform-tab-meta {
+  color: rgba(255, 255, 255, 0.85);
 }
 .toolbar {
   display: flex;

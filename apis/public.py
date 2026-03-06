@@ -2,6 +2,7 @@ import json
 import re
 
 from fastapi import APIRouter, HTTPException, Query, status as fast_status
+from sqlalchemy import and_, or_
 
 from apis.base import error_response, success_response
 from core.config import cfg
@@ -25,11 +26,16 @@ def _estimate_word_count(text: str) -> int:
 
 
 def _serialize_channel(feed: Feed) -> dict:
+    source_type = str(feed.source_type or "wechat")
+    source_platform = str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss"))
     return {
         "id": feed.id,
         "name": feed.mp_name or "",
         "cover": feed.mp_cover or "",
         "intro": feed.mp_intro or "",
+        "source_type": source_type,
+        "source_platform": source_platform,
+        "source_url": feed.source_url or "",
     }
 
 
@@ -102,7 +108,12 @@ async def list_public_channels(
     kw: str = Query(""),
 ):
     session = DB.get_session()
-    query = session.query(Feed).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "")
+    query = session.query(Feed).filter(
+        or_(
+            and_(Feed.faker_id.isnot(None), Feed.faker_id != ""),
+            Feed.source_type.in_(["rss", "rsshub"]),
+        )
+    )
     if kw:
         query = query.filter(Feed.mp_name.ilike(f"%{kw}%"))
     total = query.count()
@@ -148,6 +159,7 @@ async def list_public_channel_articles(
                 "mp_id": article.mp_id or "",
                 "mp_name": feed.mp_name or "",
                 "pic_url": article.pic_url or "",
+                "source_platform": str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss")),
                 "read_count": getattr(article, "read_count", None),
                 "like_count": getattr(article, "like_count", None),
                 "share_count": getattr(article, "share_count", None),

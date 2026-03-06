@@ -5,7 +5,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status as fast_status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 
 from apis.base import error_response, success_response, format_search_kw
 from core.config import cfg
@@ -69,11 +69,16 @@ def _mask_openid(v: str) -> str:
 
 
 def _serialize_feed(feed: Feed) -> dict:
+    source_type = str(feed.source_type or "wechat")
+    source_platform = str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss"))
     return {
         "id": str(feed.id),
         "name": feed.mp_name or "",
         "cover": feed.mp_cover or "",
         "intro": feed.mp_intro or "",
+        "source_type": source_type,
+        "source_platform": source_platform,
+        "source_url": feed.source_url or "",
         "created_at": str(getattr(feed, "created_at", "") or ""),
         "updated_at": str(getattr(feed, "updated_at", "") or ""),
     }
@@ -100,7 +105,7 @@ async def service_ping(_key: str = Depends(require_service_api_key)):
     return success_response({"ok": True})
 
 
-@router.get("/channels", summary="频道列表(公众号)")
+@router.get("/channels", summary="频道列表(多平台)")
 async def service_list_channels(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -108,7 +113,12 @@ async def service_list_channels(
     _key: str = Depends(require_service_api_key),
 ):
     session = DB.get_session()
-    q = session.query(Feed).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "")
+    q = session.query(Feed).filter(
+        or_(
+            and_(Feed.faker_id.isnot(None), Feed.faker_id != ""),
+            Feed.source_type.in_(["rss", "rsshub"]),
+        )
+    )
     if kw:
         q = q.filter(Feed.mp_name.ilike(f"%{kw}%"))
     total = q.count()
@@ -144,6 +154,7 @@ async def service_list_channel_articles(
                 "publish_time": int(art.publish_time or 0),
                 "mp_id": art.mp_id or "",
                 "mp_name": feed.mp_name or "",
+                "source_platform": str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss")),
                 "pic_url": art.pic_url or "",
                 "url": art.url or "",
                 "content": art.content if include_content else None,

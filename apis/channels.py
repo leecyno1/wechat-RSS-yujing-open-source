@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as fast_status
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 
 from apis.base import error_response, success_response
 from core.auth import get_current_user
@@ -111,15 +111,24 @@ async def list_channel_feeds(
     session = DB.get_session()
 
     user_id = _uid(current_user)
+    supported_feed_filter = or_(
+        and_(Feed.faker_id.isnot(None), Feed.faker_id != ""),
+        Feed.source_type.in_(["rss", "rsshub"]),
+    )
 
     # 用户订阅列表（多用户隔离）
-    subs_q = session.query(UserSubscription.feed_id).filter(UserSubscription.user_id == user_id)
-    has_subs = bool(session.query(func.count(UserSubscription.id)).filter(UserSubscription.user_id == user_id).scalar() or 0)
+    subs_q = (
+        session.query(UserSubscription.feed_id)
+        .join(Feed, Feed.id == UserSubscription.feed_id)
+        .filter(UserSubscription.user_id == user_id)
+        .filter(supported_feed_filter)
+    )
+    has_subs = bool(subs_q.count() or 0)
 
     # 兼容旧单用户数据：管理员如果尚未建立订阅映射，则默认“订阅全部”
     if not has_subs and _is_admin(current_user):
         try:
-            feeds_all = session.query(Feed.id).filter(Feed.faker_id.isnot(None)).filter(Feed.faker_id != "").all()
+            feeds_all = session.query(Feed.id).filter(supported_feed_filter).all()
             now = datetime.now()
             session.bulk_save_objects(
                 [UserSubscription(user_id=user_id, feed_id=fid, created_at=now, updated_at=now) for (fid,) in feeds_all]
@@ -133,8 +142,7 @@ async def list_channel_feeds(
         session.query(Feed)
         .join(UserSubscription, UserSubscription.feed_id == Feed.id)
         .filter(UserSubscription.user_id == user_id)
-        .filter(Feed.faker_id.isnot(None))
-        .filter(Feed.faker_id != "")
+        .filter(supported_feed_filter)
     )
     if kw:
         feed_query = feed_query.filter(Feed.mp_name.ilike(f"%{kw}%"))
@@ -179,6 +187,8 @@ async def list_channel_feeds(
     try:
         dirty = False
         for f in feeds:
+            if str(f.source_type or "wechat").strip().lower() in ("rss", "rsshub"):
+                continue
             norm = _normalize_fakeid(f.faker_id)
             if norm and f.faker_id != norm:
                 f.faker_id = norm
@@ -208,6 +218,9 @@ async def list_channel_feeds(
                 "name": f.mp_name or "",
                 "cover": f.mp_cover or "",
                 "intro": f.mp_intro or "",
+                "source_type": (f.source_type or "wechat"),
+                "source_platform": (f.source_platform or ("wechat" if (f.faker_id or "").strip() else "rss")),
+                "source_url": f.source_url or "",
                 "created_at": _safe_isoformat(f.created_at),
                 "unread_count": unread_map.get(f.id, 0),
                 "article_count": total_map.get(f.id, 0),

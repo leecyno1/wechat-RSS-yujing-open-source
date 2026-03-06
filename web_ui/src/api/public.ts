@@ -5,6 +5,9 @@ export interface PublicChannel {
   name: string
   cover: string
   intro: string
+  source_type?: string
+  source_platform?: string
+  source_url?: string
 }
 
 export interface PublicArticleItem {
@@ -14,6 +17,7 @@ export interface PublicArticleItem {
   publish_time: number
   mp_id: string
   mp_name: string
+  source_platform?: string
   pic_url: string
   is_read: number
   word_count: number
@@ -72,4 +76,3 @@ export const generateKeyPointsAuthed = (articleId: string) => {
 export const generateBreakdownAuthed = (articleId: string) => {
   return http.post<{ code: number; data: PublicInsights }>(`/wx/insights/${encodeURIComponent(articleId)}/breakdown`)
 }
-

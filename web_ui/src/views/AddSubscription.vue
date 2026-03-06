@@ -99,6 +99,73 @@
             <a-button @click="handleGetMpInfo" :loading="isFetching">获取</a-button>
           </div>
         </a-tab-pane>
+
+        <a-tab-pane key="multisource" title="多平台RSS">
+          <div class="source-layout">
+            <div class="source-form">
+              <div class="source-grid">
+                <a-select v-model="sourceForm.source_platform" placeholder="选择平台">
+                  <a-option v-for="p in sourcePlatformOptions" :key="p.value" :value="p.value">{{ p.label }}</a-option>
+                </a-select>
+                <a-select v-model="sourceForm.source_type" placeholder="来源类型">
+                  <a-option value="rss">RSS/Atom</a-option>
+                  <a-option value="rsshub">RSSHub</a-option>
+                </a-select>
+                <a-input v-model="sourceForm.name" allow-clear placeholder="订阅名称（可选）" />
+              </div>
+
+              <div v-if="sourceForm.source_type === 'rss'" class="source-grid source-grid-single">
+                <a-input v-model="sourceForm.source_url" allow-clear placeholder="RSS URL（例如 https://feeds.bbci.co.uk/news/world/rss.xml）" />
+              </div>
+              <div v-else class="source-grid">
+                <a-input v-model="sourceForm.rsshub_base_url" allow-clear placeholder="RSSHub Base URL（例如 https://rsshub.app）" />
+                <a-input v-model="sourceForm.rsshub_route" allow-clear placeholder="RSSHub 路由（例如 /zhihu/hotlist）" />
+                <a-input disabled value="自动订阅当前账号" />
+              </div>
+
+              <div class="inline-row">
+                <a-button type="primary" :loading="sourceSubmitting" @click="submitSourceFeed">添加到订阅</a-button>
+                <a-button type="outline" :loading="sourceListLoading" @click="loadSourceFeeds">刷新已添加列表</a-button>
+              </div>
+            </div>
+
+            <div class="source-presets">
+              <div class="source-title">平台模板</div>
+              <div class="preset-grid">
+                <div v-for="preset in sourcePresets" :key="`${preset.platform}-${preset.name}`" class="preset-card">
+                  <div class="preset-name">{{ preset.name }}</div>
+                  <div class="preset-desc">{{ preset.description || '平台预置模板' }}</div>
+                  <div class="inline-row">
+                    <a-button size="small" type="outline" @click="applyPreset(preset)">套用</a-button>
+                    <a-button size="small" type="primary" :loading="sourceSubmitting" @click="quickAddPreset(preset)">一键添加</a-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="source-list-wrap">
+              <div class="source-title">已添加多平台订阅</div>
+              <a-list v-if="sourceFeeds.length" :bordered="false">
+                <a-list-item v-for="item in sourceFeeds" :key="item.id" class="source-item">
+                  <div class="source-item-main">
+                    <div class="source-item-title">{{ item.name }}</div>
+                    <div class="source-item-sub">{{ item.source_platform }} · {{ item.source_type }}</div>
+                    <div class="source-item-url">{{ item.source_url }}</div>
+                  </div>
+                  <a-button
+                    size="mini"
+                    type="outline"
+                    :loading="sourceRefreshLoadingId === item.id"
+                    @click="refreshOneSource(item.id)"
+                  >
+                    刷新
+                  </a-button>
+                </a-list-item>
+              </a-list>
+              <div v-else class="muted">还没有添加多平台 RSS 订阅。</div>
+            </div>
+          </div>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
     <WechatAuthQrcode ref="qrcodeRef" @success="onWechatAuthSuccess" />
@@ -112,6 +179,14 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { addSubscription, getPlaza, getSubscriptions, searchBiz, getSubscriptionInfo } from '@/api/subscription'
 import {Avatar} from '@/utils/constants'
 import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
+import {
+  addSourceFeed,
+  listSourceFeeds,
+  listSourcePlatformPresets,
+  refreshSourceFeed,
+  SourceFeedItem,
+  SourcePresetItem
+} from '@/api/sources'
 const router = useRouter()
 const loading = ref(false)
 const isFetching = ref(false)
@@ -279,6 +354,31 @@ const plazaCategories = computed(() => plazaData.value.categories || [])
 const subscribedFeedIds = ref<Set<string>>(new Set())
 const subscribedNames = ref<Set<string>>(new Set())
 const addingMap = ref<Record<string, boolean>>({})
+const sourceSubmitting = ref(false)
+const sourceListLoading = ref(false)
+const sourceRefreshLoadingId = ref('')
+const sourceFeeds = ref<SourceFeedItem[]>([])
+const sourcePresets = ref<SourcePresetItem[]>([])
+const sourceForm = ref({
+  source_platform: 'zhihu',
+  source_type: 'rsshub' as 'rss' | 'rsshub',
+  source_url: '',
+  rsshub_base_url: 'https://rsshub.app',
+  rsshub_route: '/zhihu/hotlist',
+  name: ''
+})
+
+const sourcePlatformOptions = computed(() => {
+  const dedup = new Map<string, string>()
+  for (const p of sourcePresets.value) {
+    if (!dedup.has(p.platform)) {
+      dedup.set(p.platform, p.name || p.platform.toUpperCase())
+    }
+  }
+  const list = Array.from(dedup.entries()).map(([value, label]) => ({ value, label }))
+  if (!list.find((x) => x.value === 'rss')) list.push({ value: 'rss', label: 'RSS' })
+  return list
+})
 
 const loadSubscribed = async () => {
   try {
@@ -363,13 +463,106 @@ const subscribeFromPlaza = async (it: PlazaItem) => {
   }
 }
 
+const loadSourcePresets = async () => {
+  try {
+    const res: any = await listSourcePlatformPresets()
+    sourcePresets.value = res?.list || []
+    if (sourcePresets.value.length && !sourceForm.value.source_platform) {
+      sourceForm.value.source_platform = String(sourcePresets.value[0].platform || 'rss')
+    }
+  } catch {
+    sourcePresets.value = []
+  }
+}
+
+const applyPreset = (preset: SourcePresetItem) => {
+  sourceForm.value.source_platform = preset.platform || sourceForm.value.source_platform
+  sourceForm.value.source_type = (preset.source_type || 'rss') as 'rss' | 'rsshub'
+  sourceForm.value.source_url = String(preset.source_url || '')
+  sourceForm.value.rsshub_route = String(preset.rsshub_route_template || '')
+  if (sourceForm.value.source_type === 'rsshub' && !sourceForm.value.rsshub_base_url) {
+    sourceForm.value.rsshub_base_url = 'https://rsshub.app'
+  }
+  sourceForm.value.name = sourceForm.value.name || String(preset.name || '')
+}
+
+const loadSourceFeeds = async () => {
+  sourceListLoading.value = true
+  try {
+    const res: any = await listSourceFeeds({ limit: 500, offset: 0 })
+    sourceFeeds.value = res?.list || []
+  } catch (e: any) {
+    sourceFeeds.value = []
+    Message.error(e?.message || '加载多平台订阅失败')
+  } finally {
+    sourceListLoading.value = false
+  }
+}
+
+const submitSourceFeed = async () => {
+  if (sourceSubmitting.value) return
+  if (sourceForm.value.source_type === 'rss' && !sourceForm.value.source_url.trim()) {
+    Message.warning('请填写 RSS URL')
+    return
+  }
+  if (sourceForm.value.source_type === 'rsshub') {
+    if (!sourceForm.value.rsshub_base_url.trim()) {
+      Message.warning('请填写 RSSHub Base URL')
+      return
+    }
+    if (!sourceForm.value.rsshub_route.trim()) {
+      Message.warning('请填写 RSSHub 路由')
+      return
+    }
+  }
+
+  sourceSubmitting.value = true
+  try {
+    await addSourceFeed({
+      source_type: sourceForm.value.source_type,
+      source_platform: sourceForm.value.source_platform || undefined,
+      source_url: sourceForm.value.source_type === 'rss' ? sourceForm.value.source_url.trim() : undefined,
+      rsshub_base_url: sourceForm.value.source_type === 'rsshub' ? sourceForm.value.rsshub_base_url.trim() : undefined,
+      rsshub_route: sourceForm.value.source_type === 'rsshub' ? sourceForm.value.rsshub_route.trim() : undefined,
+      name: sourceForm.value.name.trim() || undefined,
+      auto_subscribe: true
+    })
+    Message.success('多平台订阅已添加')
+    await Promise.all([loadSourceFeeds(), loadSubscribed()])
+  } catch (e: any) {
+    Message.error(e?.message || '添加失败')
+  } finally {
+    sourceSubmitting.value = false
+  }
+}
+
+const quickAddPreset = async (preset: SourcePresetItem) => {
+  applyPreset(preset)
+  if (!sourceForm.value.name.trim()) {
+    sourceForm.value.name = String(preset.name || '')
+  }
+  await submitSourceFeed()
+}
+
+const refreshOneSource = async (feedId: string) => {
+  if (!feedId) return
+  sourceRefreshLoadingId.value = feedId
+  try {
+    const res: any = await refreshSourceFeed(feedId)
+    Message.success(`刷新完成：新增 ${Number(res?.changed || 0)} 篇`)
+  } catch (e: any) {
+    Message.error(e?.message || '刷新失败')
+  } finally {
+    sourceRefreshLoadingId.value = ''
+  }
+}
+
 const goBack = () => {
   router.go(-1)
 }
 
 onMounted(async () => {
-  await loadSubscribed()
-  await loadPlaza()
+  await Promise.allSettled([loadSubscribed(), loadPlaza(), loadSourcePresets(), loadSourceFeeds()])
 })
 </script>
 
@@ -451,5 +644,86 @@ onMounted(async () => {
 .muted {
   color: var(--color-text-3);
   padding: 8px 0;
+}
+.source-layout {
+  display: grid;
+  gap: 14px;
+}
+.source-form {
+  border: 1px solid var(--color-neutral-3);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.source-grid-single {
+  grid-template-columns: 1fr;
+}
+.source-title {
+  font-weight: 700;
+  color: var(--color-text-1);
+}
+.preset-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.preset-card {
+  border: 1px solid var(--color-neutral-3);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+.preset-name {
+  font-weight: 700;
+}
+.preset-desc {
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+.source-list-wrap {
+  border: 1px solid var(--color-neutral-3);
+  border-radius: 12px;
+  padding: 12px;
+}
+.source-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.source-item-main {
+  min-width: 0;
+}
+.source-item-title {
+  font-weight: 700;
+}
+.source-item-sub {
+  margin-top: 2px;
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+.source-item-url {
+  margin-top: 4px;
+  color: var(--color-text-3);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 640px;
+}
+
+@media (max-width: 900px) {
+  .source-grid,
+  .preset-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
