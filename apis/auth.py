@@ -14,6 +14,7 @@ from driver.base import WX_API
 from core.config import set_config, cfg
 from pydantic import BaseModel, Field
 from driver.token import set_token
+from sqlalchemy import and_, or_
 router = APIRouter(prefix=f"/auth", tags=["认证"])
 from driver.success import Success
 from driver.wx_api import get_qr_code #通过API登录
@@ -59,6 +60,93 @@ class RegisterRequest(BaseModel):
     email: str | None = Field(None, max_length=100)
 
 
+def _split_csv(raw: str | None) -> list[str]:
+    text = str(raw or "").strip()
+    if not text:
+        return []
+    return [x.strip() for x in text.split(",") if str(x).strip()]
+
+
+def _platform_filter_expr(FeedModel, platform: str):
+    p = str(platform or "").strip().lower()
+    if p in ("wechat", "wx", "weixin"):
+        return or_(
+            FeedModel.source_platform == "wechat",
+            and_(FeedModel.faker_id.isnot(None), FeedModel.faker_id != ""),
+        )
+    if p in ("rss", "rsshub"):
+        return FeedModel.source_type == p
+    return FeedModel.source_platform == p
+
+
+def _auto_subscribe_defaults(session, user_id: str) -> int:
+    """
+    Auto subscribe starter pack for newly registered users.
+
+    Controlled by:
+    - auth.default_subscribe_enable
+    - auth.default_subscribe_platforms
+    - auth.default_subscribe_per_platform
+    - auth.default_subscribe_feed_ids
+    """
+    if not bool(cfg.get("auth.default_subscribe_enable", False)):
+        return 0
+
+    from core.models.feed import Feed
+    from core.models.user_subscription import UserSubscription
+
+    direct_feed_ids = _split_csv(cfg.get("auth.default_subscribe_feed_ids", ""))
+    platforms = _split_csv(
+        cfg.get("auth.default_subscribe_platforms", "wechat,zhihu,xueqiu,toutiao,baijiahao,wsj,bbc")
+    )
+    try:
+        per_platform = int(cfg.get("auth.default_subscribe_per_platform", 3) or 3)
+    except Exception:
+        per_platform = 3
+    per_platform = max(1, min(30, per_platform))
+
+    selected_feed_ids: list[str] = []
+
+    if direct_feed_ids:
+        rows = session.query(Feed.id).filter(Feed.id.in_(direct_feed_ids)).all()
+        selected_feed_ids.extend([str(fid) for (fid,) in rows])
+
+    for p in platforms:
+        expr = _platform_filter_expr(Feed, p)
+        rows = (
+            session.query(Feed.id)
+            .filter(expr)
+            .order_by(Feed.update_time.desc(), Feed.sync_time.desc(), Feed.created_at.desc())
+            .limit(per_platform)
+            .all()
+        )
+        selected_feed_ids.extend([str(fid) for (fid,) in rows])
+
+    # Keep order and deduplicate.
+    dedup_ids = list(dict.fromkeys([x for x in selected_feed_ids if x]))
+    if not dedup_ids:
+        return 0
+
+    existing = set(
+        x
+        for (x,) in session.query(UserSubscription.feed_id)
+        .filter(UserSubscription.user_id == user_id)
+        .filter(UserSubscription.feed_id.in_(dedup_ids))
+        .all()
+    )
+    now = datetime.now()
+    to_insert = [
+        UserSubscription(user_id=user_id, feed_id=fid, created_at=now, updated_at=now)
+        for fid in dedup_ids
+        if fid not in existing
+    ]
+    if not to_insert:
+        return 0
+    session.bulk_save_objects(to_insert)
+    session.commit()
+    return len(to_insert)
+
+
 @router.post("/register", summary="用户注册(公域可选开启)")
 async def register(payload: RegisterRequest):
     if not bool(cfg.get("auth.allow_register", False)):
@@ -101,6 +189,12 @@ async def register(payload: RegisterRequest):
         )
         session.add(u)
         session.commit()
+        default_subscribed = 0
+        try:
+            default_subscribed = _auto_subscribe_defaults(session, str(u.id))
+        except Exception:
+            session.rollback()
+            default_subscribed = 0
 
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(data={"sub": u.username}, expires_delta=access_token_expires)
@@ -109,6 +203,7 @@ async def register(payload: RegisterRequest):
                 "access_token": access_token,
                 "token_type": "bearer",
                 "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                "default_subscribed": default_subscribed,
             }
         )
     finally:

@@ -77,6 +77,14 @@ token_expire_minutes: ${TOKEN_EXPIRE_MINUTES:-4320}
 auth:
   # 是否允许公开注册（公域部署建议开启后配合反爬/验证码/限流）
   allow_register: ${ALLOW_REGISTER:-False}
+  # 新用户注册后自动订阅默认平台包
+  default_subscribe_enable: ${AUTH_DEFAULT_SUBSCRIBE_ENABLE:-False}
+  # 平台列表（逗号分隔）
+  default_subscribe_platforms: ${AUTH_DEFAULT_SUBSCRIBE_PLATFORMS:-wechat,zhihu,xueqiu,toutiao,baijiahao,wsj,bbc}
+  # 每个平台默认加入数量
+  default_subscribe_per_platform: ${AUTH_DEFAULT_SUBSCRIBE_PER_PLATFORM:-3}
+  # 指定固定 feed_id（逗号分隔，优先加入）
+  default_subscribe_feed_ids: ${AUTH_DEFAULT_SUBSCRIBE_FEED_IDS:-}
 
 # 公告/推广（登录后弹窗）
 promo:
@@ -218,6 +226,10 @@ auto_update:
   cron_evening: ${AUTO_UPDATE_CRON_EVENING:-0 21 * * *}
   # 每次更新每个公众号抓取页数（越大越慢）
   max_page: ${AUTO_UPDATE_MAX_PAGE:-1}
+  # 多平台来源（rss/rsshub）默认并发 workers
+  source_workers: ${AUTO_UPDATE_SOURCE_WORKERS:-4}
+  # 多平台来源并发覆盖（逗号分隔），示例：zhihu:4,xueqiu:3,wsj:1,bbc:1
+  source_workers_by_platform: ${AUTO_UPDATE_SOURCE_WORKERS_BY_PLATFORM:-}
 
 # 合集/推送（生成待发送 outbox，机器人拉取后推送；推送实现由机器人负责）
 digest:
