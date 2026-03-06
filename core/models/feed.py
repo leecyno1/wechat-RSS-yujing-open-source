@@ -1,9 +1,11 @@
-from  .base import Base,Column,String,Integer,DateTime
+from .base import Base, Column, String, Integer, DateTime, Text
+
+
 class Feed(Base):   
     from_attributes = True
-    __tablename__ = 'feeds'
+    __tablename__ = "feeds"
     id = Column(String(255), primary_key=True)
-    mp_name =Column(String(255))
+    mp_name = Column(String(255))
     mp_cover = Column(String(255))
     mp_intro = Column(String(255))
     status = Column(Integer)
@@ -12,3 +14,8 @@ class Feed(Base):
     created_at = Column(DateTime) 
     updated_at = Column(DateTime)
     faker_id = Column(String(255))
+    # Source metadata (wechat | rss | rsshub). Existing rows default to wechat semantics.
+    source_type = Column(String(32), default="wechat", index=True)
+    source_url = Column(String(1000), nullable=True)
+    source_key = Column(String(255), nullable=True, index=True)
+    source_config = Column(Text, nullable=True)

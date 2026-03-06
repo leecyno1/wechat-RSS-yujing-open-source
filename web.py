@@ -32,6 +32,7 @@ from apis.binding import router as binding_router
 from apis.wechat_official import legacy_router as wechat_official_legacy_router
 from apis.wechat_official import router as wechat_official_router
 from apis.langbot_webhook import router as langbot_router
+from apis.sources import router as sources_router
 import apis
 import os
 from core.config import cfg,VERSION,API_BASE
@@ -96,6 +97,7 @@ api_router.include_router(digest_router)
 api_router.include_router(binding_router)
 api_router.include_router(wechat_official_router)
 api_router.include_router(langbot_router)
+api_router.include_router(sources_router)
 
 resource_router = APIRouter(prefix="/static")
 resource_router.include_router(res_router)
