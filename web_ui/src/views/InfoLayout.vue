@@ -9,6 +9,7 @@
       >
         <a-tab-pane key="system" title="系统" />
         <a-tab-pane key="configs" title="配置" />
+        <a-tab-pane key="starter-pack" title="订阅包" />
       </a-tabs>
     </div>
 
@@ -25,12 +26,21 @@ const router = useRouter()
 
 const activeTab = computed(() => {
   const path = route.path || ''
+  if (path.includes('/starter-pack')) return 'starter-pack'
   if (path.includes('/configs')) return 'configs'
   return 'system'
 })
 
 const onTabChange = (key: string) => {
-  router.push(key === 'configs' ? '/info/configs' : '/info/system')
+  if (key === 'configs') {
+    router.push('/info/configs')
+    return
+  }
+  if (key === 'starter-pack') {
+    router.push('/info/starter-pack')
+    return
+  }
+  router.push('/info/system')
 }
 </script>
 
@@ -50,4 +60,3 @@ const onTabChange = (key: string) => {
   margin-bottom: 12px;
 }
 </style>
-

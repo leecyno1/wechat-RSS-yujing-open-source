@@ -28,8 +28,13 @@ export interface RegisterParams {
   email?: string
 }
 
+export interface RegisterResult extends LoginResult {
+  expires_in?: number
+  default_subscribed?: number
+}
+
 export const register = (data: RegisterParams) => {
-  return http.post<LoginResult & { expires_in?: number }>('/wx/auth/register', data)
+  return http.post<RegisterResult>('/wx/auth/register', data)
 }
 
 export interface VerifyResult {

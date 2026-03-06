@@ -178,9 +178,18 @@ const handleRegister = async () => {
     if (res?.access_token) {
       localStorage.setItem('token', res.access_token)
       localStorage.setItem('token_expire', Date.now() + ((res.expires_in || 0) * 1000))
+      localStorage.setItem(
+        'drlemon_new_user_guide',
+        JSON.stringify({
+          username,
+          default_subscribed: Number(res?.default_subscribed || 0),
+          ts: Date.now()
+        })
+      )
       registerVisible.value = false
-      await router.push('/channels')
-      Message.success('注册成功')
+      await router.push('/channels?onboard=1')
+      const n = Number(res?.default_subscribed || 0)
+      Message.success(n > 0 ? `注册成功，已自动订阅 ${n} 个频道` : '注册成功')
       return
     }
     throw new Error('无效的响应格式')

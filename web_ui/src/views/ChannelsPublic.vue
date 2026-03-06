@@ -261,7 +261,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
+import { Message, Modal } from '@arco-design/web-vue'
 import {
   getArticleDetailPublic,
   getPublicChannelArticles,
@@ -869,7 +869,30 @@ const markAllReadForCurrent = async () => {
 
 const goPlaza = () => router.push('/add-subscription')
 const goCreateChannel = () => router.push('/manage/topics/add')
-	const goTopics = () => router.push('/manage/topics')
+const goTopics = () => router.push('/manage/topics')
+
+const showNewUserGuideIfNeeded = () => {
+  const raw = localStorage.getItem('drlemon_new_user_guide')
+  if (!raw) return
+  localStorage.removeItem('drlemon_new_user_guide')
+  let defaultSubscribed = 0
+  try {
+    const parsed = JSON.parse(raw)
+    defaultSubscribed = Number(parsed?.default_subscribed || 0)
+  } catch {
+    defaultSubscribed = 0
+  }
+  const summary = defaultSubscribed > 0 ? `系统已为你自动订阅 ${defaultSubscribed} 个默认频道。` : '你还没有默认频道。'
+  Modal.confirm({
+    title: '欢迎使用 Dr.Lemon 订阅助手',
+    content: `${summary} 现在可继续完成三步：1) 添加/调整订阅；2) 关注并绑定柠檬博士；3) 使用一键刷新查看最新内容。`,
+    okText: '去添加订阅',
+    cancelText: '稍后',
+    onOk: () => {
+      router.push('/add-subscription')
+    }
+  })
+}
 
 const selectTopic = async (t: any, silent?: boolean) => {
   activeTopic.value = t
@@ -926,15 +949,17 @@ onMounted(async () => {
     if (t) await selectTopic(t, true)
   }
 
-	  if (pollTimer) clearInterval(pollTimer)
-	  pollTimer = setInterval(() => {
-	    if (document.hidden) return
-	    if (channelsLoading.value || channelsRefreshing.value || articlesLoading.value || articlesRefreshing.value) return
-	    if (!activeChannelId.value) return
-	    loadFeeds({ background: true })
-	    loadArticles({ background: true })
-	  }, AUTO_POLL_MS)
-	})
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(() => {
+    if (document.hidden) return
+    if (channelsLoading.value || channelsRefreshing.value || articlesLoading.value || articlesRefreshing.value) return
+    if (!activeChannelId.value) return
+    loadFeeds({ background: true })
+    loadArticles({ background: true })
+  }, AUTO_POLL_MS)
+
+  showNewUserGuideIfNeeded()
+})
 
 onUnmounted(() => {
   if (pollTimer) {

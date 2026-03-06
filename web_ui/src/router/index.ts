@@ -59,6 +59,10 @@ const routes = [
         redirect: () => ({ path: '/info/configs' })
       },
       {
+        path: 'starter-pack',
+        redirect: () => ({ path: '/info/starter-pack' })
+      },
+      {
         path: 'export/records',
         name: 'ExportList',
         component: ExportRecords,
@@ -180,6 +184,15 @@ const routes = [
             meta: {
               requiresAuth: true,
               permissions: ['config:view'],
+            },
+          },
+          {
+            path: 'starter-pack',
+            name: 'StarterPackConfig',
+            component: () => import('@/views/StarterPackConfig.vue'),
+            meta: {
+              requiresAuth: true,
+              permissions: ['admin'],
             },
           },
         ],
