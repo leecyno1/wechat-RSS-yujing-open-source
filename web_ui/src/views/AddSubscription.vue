@@ -6,8 +6,14 @@
       :show-back="true"
       @back="goBack"
     />
-    
+
     <a-card>
+      <div class="quick-tools">
+        <a-button type="primary" size="small" :loading="starterImporting" @click="importStarterPackNow">
+          一键导入默认订阅包
+        </a-button>
+        <span class="quick-tools-tip">按系统配置导入默认频道（可重复点击，自动去重）</span>
+      </div>
       <a-tabs type="rounded" default-active-key="plaza">
         <a-tab-pane key="plaza" title="订阅广场">
           <div class="plaza-top">
@@ -178,6 +184,7 @@ import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { addSubscription, getPlaza, getSubscriptions, searchBiz, getSubscriptionInfo } from '@/api/subscription'
 import {Avatar} from '@/utils/constants'
+import { importDefaultStarterPack } from '@/api/auth'
 import WechatAuthQrcode from '@/components/WechatAuthQrcode.vue'
 import {
   addSourceFeed,
@@ -357,6 +364,7 @@ const addingMap = ref<Record<string, boolean>>({})
 const sourceSubmitting = ref(false)
 const sourceListLoading = ref(false)
 const sourceRefreshLoadingId = ref('')
+const starterImporting = ref(false)
 const sourceFeeds = ref<SourceFeedItem[]>([])
 const sourcePresets = ref<SourcePresetItem[]>([])
 const sourceForm = ref({
@@ -557,6 +565,25 @@ const refreshOneSource = async (feedId: string) => {
   }
 }
 
+const importStarterPackNow = async () => {
+  if (starterImporting.value) return
+  starterImporting.value = true
+  try {
+    const res: any = await importDefaultStarterPack()
+    const inserted = Number(res?.inserted || 0)
+    if (inserted > 0) {
+      Message.success(`已导入 ${inserted} 个默认订阅`)
+    } else {
+      Message.info('默认订阅已存在，无需重复导入')
+    }
+    await loadSubscribed()
+  } catch (e: any) {
+    Message.error(e?.message || '导入失败')
+  } finally {
+    starterImporting.value = false
+  }
+}
+
 const goBack = () => {
   router.go(-1)
 }
@@ -575,6 +602,17 @@ onMounted(async () => {
 
 .arco-form-item {
   margin-bottom: 20px;
+}
+.quick-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.quick-tools-tip {
+  color: var(--color-text-3);
+  font-size: 12px;
 }
 .plaza-top {
   display: flex;

@@ -79,7 +79,7 @@ def _platform_filter_expr(FeedModel, platform: str):
     return FeedModel.source_platform == p
 
 
-def _auto_subscribe_defaults(session, user_id: str) -> int:
+def _auto_subscribe_defaults(session, user_id: str, force: bool = False) -> int:
     """
     Auto subscribe starter pack for newly registered users.
 
@@ -89,7 +89,7 @@ def _auto_subscribe_defaults(session, user_id: str) -> int:
     - auth.default_subscribe_per_platform
     - auth.default_subscribe_feed_ids
     """
-    if not bool(cfg.get("auth.default_subscribe_enable", False)):
+    if (not force) and (not bool(cfg.get("auth.default_subscribe_enable", False))):
         return 0
 
     from core.models.feed import Feed
@@ -212,6 +212,42 @@ async def register(payload: RegisterRequest):
                 session.close()
         except Exception:
             pass
+
+
+@router.post("/starter/import", summary="手动导入默认订阅包")
+async def import_starter_pack(current_user: dict = Depends(get_current_user)):
+    session = None
+    try:
+        user_id = ""
+        try:
+            user_id = str(current_user.get("original_user").id)
+        except Exception:
+            user_id = ""
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_response(code=40003, message="无法识别当前用户"),
+            )
+
+        import core.db as db
+        session = db.DB.get_session()
+        inserted = _auto_subscribe_defaults(session, user_id, force=True)
+        return success_response({"inserted": int(inserted)})
+    except HTTPException:
+        raise
+    except Exception as e:
+        if session is not None:
+            try:
+                session.rollback()
+            except Exception:
+                pass
+        return error_response(code=50003, message=f"导入默认订阅包失败: {str(e)}")
+    finally:
+        if session is not None:
+            try:
+                session.close()
+            except Exception:
+                pass
 @router.get("/qr/image", summary="获取登录二维码图片")
 async def qr_image(current_user=Depends(get_current_user)):
     return success_response(WX_API.GetHasCode())

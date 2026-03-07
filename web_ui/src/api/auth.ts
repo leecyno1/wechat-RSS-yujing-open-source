@@ -37,6 +37,14 @@ export const register = (data: RegisterParams) => {
   return http.post<RegisterResult>('/wx/auth/register', data)
 }
 
+export interface StarterImportResult {
+  inserted: number
+}
+
+export const importDefaultStarterPack = () => {
+  return http.post<StarterImportResult>('/wx/auth/starter/import')
+}
+
 export interface VerifyResult {
   is_valid: boolean
   username: string
