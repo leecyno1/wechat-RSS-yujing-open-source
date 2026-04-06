@@ -59,8 +59,10 @@ async def list_message_tasks(
             },
             "total": total
         })
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 @router.get("/{task_id}", summary="获取单个消息任务详情")
 async def get_message_task(
@@ -86,10 +88,12 @@ async def get_message_task(
     try:
         message_task = db.query(MessageTask).filter(MessageTask.id == task_id).first()
         if not message_task:
-            raise HTTPException(status_code=404, detail="Message task not found")
+            raise HTTPException(status_code=404, detail=error_response(code=40401, message="Message task not found"))
         return success_response(data=message_task)
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 @router.get("/message/test/{task_id}", summary="测试消息")
 async def test_message_task(
     task_id: str,
@@ -112,10 +116,12 @@ async def test_message_task(
     try:
         message_task = db.query(MessageTask).filter(MessageTask.id == task_id).first()
         if not message_task:
-            raise HTTPException(status_code=404, detail="Message task not found")
+            raise HTTPException(status_code=404, detail=error_response(code=40401, message="Message task not found"))
         return success_response(data=message_task)
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 @router.get("/{task_id}/run", summary="执行单个消息任务详情")
 async def run_message_task(
     task_id: str,
@@ -146,7 +152,7 @@ async def run_message_task(
         tasks=run(task_id,isTest=isTest)
         count=0
         if not tasks:
-            raise HTTPException(status_code=404, detail="Message task not found")
+            raise HTTPException(status_code=404, detail=error_response(code=40401, message="Message task not found"))
         else:
             import json
             for task in tasks:
@@ -162,10 +168,11 @@ async def run_message_task(
             count=1
         mps["message"]=f"执行成功，共执行更新{count}个订阅号"
         return success_response(data=mps,message=f"执行成功，共执行更新{count}个订阅号")
-
+    except HTTPException:
+        raise
     except Exception as e:
         print_error(e)
-        return error_response(code=402, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 
 class MessageTaskCreate(BaseModel):
@@ -211,10 +218,12 @@ async def create_message_task(
         db.commit()
         db.refresh(db_task)
         return success_response(data=db_task)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         print_error(e)
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 @router.put("/{task_id}", summary="更新消息任务")
 async def update_message_task(
@@ -241,7 +250,7 @@ async def update_message_task(
     try:
         db_task = db.query(MessageTask).filter(MessageTask.id == task_id).first()
         if not db_task:
-            raise HTTPException(status_code=404, detail="Message task not found")
+            raise HTTPException(status_code=404, detail=error_response(code=40401, message="Message task not found"))
         
         if task_data.message_template is not None:
             db_task.message_template = task_data.message_template
@@ -260,9 +269,11 @@ async def update_message_task(
         db.commit()
         db.refresh(db_task)
         return success_response(data=db_task)
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 @router.put("/job/fresh",summary="重载任务")
 async def fresh_message_task(
      current_user: dict = Depends(get_current_user)
@@ -295,11 +306,13 @@ async def delete_message_task(
     try:
         db_task = db.query(MessageTask).filter(MessageTask.id == task_id).first()
         if not db_task:
-            raise HTTPException(status_code=404, detail="Message task not found")
+            raise HTTPException(status_code=404, detail=error_response(code=40401, message="Message task not found"))
         
         db.delete(db_task)
         db.commit()
         return success_response(message="Message task deleted successfully")
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))

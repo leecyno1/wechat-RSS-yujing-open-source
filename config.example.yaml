@@ -3,7 +3,7 @@ server:
    #服务名称
    name: ${SERVER_NAME:-we-mp-rss}
    #前端显示名称
-   web_name: ${WEB_NAME:-WeRSS微信公众号订阅助手}
+   web_name: ${WEB_NAME:-大圣之怒订阅助手}
    #过期是否发送授权二维通知 默认True
    send_code: ${SEND_CODE:-True}
    #二维通知标题
@@ -46,6 +46,17 @@ port: ${PORT:-8001}
 #调试模式
 debug: ${DEBUG:-False}
 
+# CORS（公域部署建议配置明确域名白名单）
+cors:
+  # 逗号分隔；例如：https://app.example.com,https://admin.example.com
+  allow_origins: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+  # 可选：正则白名单（例如 https://.*\\.example\\.com）
+  allow_origin_regex: ${CORS_ALLOW_ORIGIN_REGEX:-}
+  # 当 allow_origins 含 * 时会自动降级为 False
+  allow_credentials: ${CORS_ALLOW_CREDENTIALS:-True}
+  allow_methods: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+  allow_headers: ${CORS_ALLOW_HEADERS:-Authorization,Content-Type,X-API-Key}
+
 
 #最大页数 第一次添加 采集的页数默认5页
 max_page: ${MAX_PAGE:-5}
@@ -70,13 +81,23 @@ rss:
   #RSS分页大小 默认10
   page_size: ${RSS_PAGE_SIZE:-30}
 
-#登录会话有效时长 单位分钟 默认4320分钟 3天
-token_expire_minutes: ${TOKEN_EXPIRE_MINUTES:-4320}
+#登录会话有效时长 单位分钟 默认43200分钟 30天
+token_expire_minutes: ${TOKEN_EXPIRE_MINUTES:-43200}
 
 # 认证/公域注册
 auth:
+  # 登录失败最多尝试次数（0表示不限制）
+  max_login_attempts: ${AUTH_MAX_LOGIN_ATTEMPTS:-20}
   # 是否允许公开注册（公域部署建议开启后配合反爬/验证码/限流）
   allow_register: ${ALLOW_REGISTER:-False}
+  # 注册是否强制邮箱验证码
+  register_require_email_code: ${AUTH_REGISTER_REQUIRE_EMAIL_CODE:-True}
+  # 注册验证码有效期（分钟）
+  register_code_ttl_minutes: ${AUTH_REGISTER_CODE_TTL_MINUTES:-10}
+  # 注册验证码重发间隔（秒）
+  register_code_resend_seconds: ${AUTH_REGISTER_CODE_RESEND_SECONDS:-60}
+  # 注册验证码邮件标题
+  register_email_subject: ${AUTH_REGISTER_EMAIL_SUBJECT:-大圣之怒订阅助手注册验证码}
   # 新用户注册后自动订阅默认平台包
   default_subscribe_enable: ${AUTH_DEFAULT_SUBSCRIBE_ENABLE:-False}
   # 平台列表（逗号分隔）
@@ -86,15 +107,41 @@ auth:
   # 指定固定 feed_id（逗号分隔，优先加入）
   default_subscribe_feed_ids: ${AUTH_DEFAULT_SUBSCRIBE_FEED_IDS:-}
 
+# 邮件服务（用于发送注册验证码）
+mail:
+  enable: ${MAIL_ENABLE:-False}
+  from_email: ${MAIL_FROM_EMAIL:-}
+  from_name: ${MAIL_FROM_NAME:-大圣之怒订阅助手}
+  smtp:
+    host: ${MAIL_SMTP_HOST:-}
+    port: ${MAIL_SMTP_PORT:-587}
+    username: ${MAIL_SMTP_USERNAME:-}
+    password: ${MAIL_SMTP_PASSWORD:-}
+    use_tls: ${MAIL_SMTP_USE_TLS:-True}
+    use_ssl: ${MAIL_SMTP_USE_SSL:-False}
+    timeout: ${MAIL_SMTP_TIMEOUT:-15}
+
+# 功能开关
+feature:
+  # 关闭后不加载公众号绑定/推送相关 API 与任务
+  wechat_binding_push_enable: ${FEATURE_WECHAT_BINDING_PUSH_ENABLE:-False}
+
+# 游客首页默认推荐（public/channels）
+public:
+  # 每个平台默认展示的推荐订阅数量
+  default_per_platform: ${PUBLIC_DEFAULT_PER_PLATFORM:-3}
+  # 平台顺序（逗号分隔）
+  platform_order: ${PUBLIC_PLATFORM_ORDER:-wechat,zhihu,xueqiu,toutiao,baijiahao,weibo,portal,rss}
+
 # 公告/推广（登录后弹窗）
 promo:
   # 二维码编码的目标URL（建议填公众号/文章的 https 链接；前端展示为二维码）
   qr_url: ${PROMO_QR_URL:-}
   # 也可直接放置二维码图片文件（优先使用），支持 png/jpg/webp
   # 默认使用内置图片；也可覆盖为 data 目录（已挂载持久化卷）如：data/promo_qr.png
-  qr_file: ${PROMO_QR_FILE:-static/promo/lemon_doctor_qr.jpg}
+  qr_file: ${PROMO_QR_FILE:-static/promo/dasheng_qr.jpg}
 
-# 公众号服务端（柠檬博士）：自定义菜单/回调/客服消息（用于“订阅推送”）
+# 公众号服务端（大圣之怒）：自定义菜单/回调/客服消息（用于“订阅推送”）
 wechat_official:
   appid: ${WECHAT_OFFICIAL_APPID:-}
   appsecret: ${WECHAT_OFFICIAL_APPSECRET:-}
@@ -126,6 +173,23 @@ cache:
 article:
   #是否真实删除文章，默认False，如果为True，则会删除数据库中的记录
   true_delete: ${ARTICLE.TRUE_DELETE:-False}
+  # 正文最小有效长度（字符）；低于该值视为“仅标题/无效正文”，会触发重抓
+  content_min_chars: ${ARTICLE_CONTENT_MIN_CHARS:-120}
+  cleanup:
+    # 历史文章清理：删除“未被收藏 + 超过N天 + 点击量后X%”的文章
+    enable: ${ARTICLE_CLEANUP_ENABLE:-True}
+    # 定时清理 cron（默认每天 04:30）
+    cron: ${ARTICLE_CLEANUP_CRON:-30 4 * * *}
+    # 启动后是否立即执行一次
+    run_on_start: ${ARTICLE_CLEANUP_RUN_ON_START:-False}
+    # 清理队列并发 worker（建议 1）
+    workers: ${ARTICLE_CLEANUP_WORKERS:-1}
+    # 超过多少天的文章才纳入清理候选
+    older_than_days: ${ARTICLE_CLEANUP_OLDER_THAN_DAYS:-20}
+    # 在候选集里按 read_count 从低到高排序，删除后 X%
+    bottom_ratio: ${ARTICLE_CLEANUP_BOTTOM_RATIO:-0.30}
+    # 分批删除大小
+    delete_batch_size: ${ARTICLE_CLEANUP_DELETE_BATCH_SIZE:-500}
 
 gather:
   #是否采集内容  默认False
@@ -147,7 +211,7 @@ gather:
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
-    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,llm.shard.profiles_json,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,wechat_official.bridge_token,langbot.webhook_token}"
+    hide_config: "${SAFE_HIDE_CONFIG:-db,secret,token,notice.wechat,notice.feishu,notice.dingding,llm.siliconflow.api_key,llm.shard.profiles_json,llm.fallback.profiles_json,llm.router.big_profiles_json,llm.router.small_profiles_json,llm.router.summary.profiles_json,llm.router.key_points.profiles_json,llm.router.breakdown.profiles_json,wx.token,wx.cookie,service.api_keys,wechat_official.token,wechat_official.appsecret,wechat_official.encoding_aes_key,wechat_official.bridge_token,langbot.webhook_token,mail.smtp.password}"
     # 授权加密KEY
     lic_key: "${SAFE_LIC_KEY:-RACHELOS}"
 log:
@@ -171,8 +235,12 @@ export:
 insights:
   # 是否在文章入库后自动生成基础洞察(摘要/一级二级标题)
   auto_basic: ${INSIGHTS_AUTO_BASIC:-True}
+  # 是否自动生成 AI 摘要（正文框“摘要”优先走大模型路由）
+  auto_ai_summary: ${INSIGHTS_AUTO_AI_SUMMARY:-True}
   # 是否自动抓取正文(用于全文拆解/更好的摘要；需要采集能力支持)
   auto_fetch_content: ${INSIGHTS_AUTO_FETCH_CONTENT:-False}
+  # 自动抓取正文的单篇超时时间（秒）
+  auto_fetch_content_timeout_seconds: ${INSIGHTS_AUTO_FETCH_CONTENT_TIMEOUT_SECONDS:-40}
   # 是否自动生成关键信息点(3-8条+高亮；无LLM时会落地可复现的 fallback)
   auto_key_points: ${INSIGHTS_AUTO_KEY_POINTS:-True}
   # 是否自动生成全文拆解(需要 LLM + 正文)
@@ -187,6 +255,8 @@ insights:
   prewarm_days: ${INSIGHTS_PREWARM_DAYS:-3}
   prewarm_limit: ${INSIGHTS_PREWARM_LIMIT:-120}
   prewarm_max_pages: ${INSIGHTS_PREWARM_MAX_PAGES:-30}
+  # 预热时优先将“缺正文/短正文”文章加入正文抓取队列
+  prewarm_prefetch_content: ${INSIGHTS_PREWARM_PREFETCH_CONTENT:-True}
 
 llm:
   # 目前仅内置 siliconflow(OpenAI兼容)；为空则禁用LLM拆解接口
@@ -203,15 +273,48 @@ llm:
     # JSON 数组字符串，例如：
     # [{"name":"sf1","provider":"siliconflow","api_url":"https://api.siliconflow.cn/v1","api_key":"sk-xxx","model":"Qwen/Qwen3-30B-A3B"}]
     profiles_json: ${LLM_SHARD_PROFILES_JSON:-}
+  # 多 provider 优先级 fallback（策略B：按 priority 顺序重试）
+  fallback:
+    enable: ${LLM_FALLBACK_ENABLE:-False}
+    # JSON 数组字符串；每个对象需包含 name/provider/api_url/api_key/model/priority
+    # priority 越小优先级越高，例如 1,2,3
+    profiles_json: ${LLM_FALLBACK_PROFILES_JSON:-}
   siliconflow:
     api_url: ${SILICONFLOW_API_URL:-https://api.siliconflow.cn/v1}
     api_key: ${SILICONFLOW_API_KEY:-}
     model: ${SILICONFLOW_MODEL:-Qwen/Qwen3-30B-A3B}
+  # 任务级模型路由（参考 0913 的大中小路由思路）
+  # 摘要=大模型路由、关键信息=小模型路由，可按任务分别配置多 provider。
+  router:
+    enable: ${LLM_ROUTER_ENABLE:-False}
+    # shard 模式下：优先命中的通道失败后是否自动 fallback 到其它通道
+    shard:
+      include_fallback: ${LLM_ROUTER_SHARD_INCLUDE_FALLBACK:-True}
+    # 兼容别名：big_profiles_json => summary.profiles_json
+    big_profiles_json: ${LLM_ROUTER_BIG_PROFILES_JSON:-}
+    summary:
+      # 可选：fallback / shard
+      mode: ${LLM_ROUTER_SUMMARY_MODE:-fallback}
+      profiles_json: ${LLM_ROUTER_SUMMARY_PROFILES_JSON:-}
+    # 兼容别名：small_profiles_json => key_points.profiles_json
+    small_profiles_json: ${LLM_ROUTER_SMALL_PROFILES_JSON:-}
+    key_points:
+      # 可选：fallback / shard
+      mode: ${LLM_ROUTER_KEY_POINTS_MODE:-fallback}
+      profiles_json: ${LLM_ROUTER_KEY_POINTS_PROFILES_JSON:-}
+    breakdown:
+      # 可选：fallback / shard（为空时会回退到 summary 路由）
+      mode: ${LLM_ROUTER_BREAKDOWN_MODE:-fallback}
+      profiles_json: ${LLM_ROUTER_BREAKDOWN_PROFILES_JSON:-}
 
 # 对外集成(给其它项目调用) - Service REST API
 service:
   # 逗号分隔；通过请求头 X-API-Key 访问 /api/v1/wx/service/*
   api_keys: ${SERVICE_API_KEYS:-}
+  # 单个 API Key 每分钟最大请求数（<=0 关闭限流）
+  rate_limit_per_minute: ${SERVICE_RATE_LIMIT_PER_MINUTE:-180}
+  # 是否记录 Service API 调用审计日志（key 指纹 + ip + path）
+  audit_log_enable: ${SERVICE_AUDIT_LOG_ENABLE:-True}
 
 # LangBot 回调（用于把 “用户发给公众号的绑定码” 回写到本站 DB）
 langbot:
@@ -230,6 +333,85 @@ auto_update:
   source_workers: ${AUTO_UPDATE_SOURCE_WORKERS:-4}
   # 多平台来源并发覆盖（逗号分隔），示例：zhihu:4,xueqiu:3,wsj:1,bbc:1
   source_workers_by_platform: ${AUTO_UPDATE_SOURCE_WORKERS_BY_PLATFORM:-}
+
+# 多平台来源扩展配置
+sources:
+  # 推荐源清单文件（用于“多平台RSS”模板）
+  presets_file: ${SOURCES_PRESETS_FILE:-core/source/source_presets.json}
+  # 手动“刷新全部多源”同步模式并发
+  refresh_workers: ${SOURCES_REFRESH_WORKERS:-10}
+  # 正文预抓取队列并发（刷新后异步提速正文预览）
+  content_workers: ${SOURCES_CONTENT_WORKERS:-8}
+  # 刷新后是否自动预抓取每个源的最新正文
+  prefetch_content_on_refresh: ${SOURCES_PREFETCH_CONTENT_ON_REFRESH:-True}
+  # 每个来源刷新后，最多预抓取多少篇文章正文
+  prefetch_content_per_feed: ${SOURCES_PREFETCH_CONTENT_PER_FEED:-2}
+  # 巡检任务持久化文件
+  maintenance_tasks_file: ${SOURCES_MAINTENANCE_TASKS_FILE:-data/source_maintenance_tasks.json}
+  # 正文回填任务：后台按计划逐篇生成正文预览（不依赖用户点击）
+  content_backfill_enable: ${SOURCES_CONTENT_BACKFILL_ENABLE:-True}
+  content_backfill_cron: ${SOURCES_CONTENT_BACKFILL_CRON:-*/20 * * * *}
+  content_backfill_run_on_start: ${SOURCES_CONTENT_BACKFILL_RUN_ON_START:-True}
+  content_backfill_limit_per_run: ${SOURCES_CONTENT_BACKFILL_LIMIT_PER_RUN:-800}
+  content_backfill_workers: ${SOURCES_CONTENT_BACKFILL_WORKERS:-8}
+  content_backfill_days: ${SOURCES_CONTENT_BACKFILL_DAYS:-3}
+  content_backfill_missing_only: ${SOURCES_CONTENT_BACKFILL_MISSING_ONLY:-True}
+  content_backfill_force: ${SOURCES_CONTENT_BACKFILL_FORCE:-False}
+  content_backfill_max_failures_per_feed: ${SOURCES_CONTENT_BACKFILL_MAX_FAILURES_PER_FEED:-4}
+  content_backfill_blocked_cooldown_hours: ${SOURCES_CONTENT_BACKFILL_BLOCKED_COOLDOWN_HOURS:-12}
+  content_backfill_skip_cooldown_feeds: ${SOURCES_CONTENT_BACKFILL_SKIP_COOLDOWN_FEEDS:-True}
+  content_backfill_enqueue_insights: ${SOURCES_CONTENT_BACKFILL_ENQUEUE_INSIGHTS:-True}
+  content_backfill_fail_state_file: ${SOURCES_CONTENT_BACKFILL_FAIL_STATE_FILE:-data/source_backfill_fail_state.json}
+  # 可选：平台/来源过滤（逗号分隔），为空表示全部
+  content_backfill_platforms: ${SOURCES_CONTENT_BACKFILL_PLATFORMS:-}
+  content_backfill_feed_ids: ${SOURCES_CONTENT_BACKFILL_FEED_IDS:-}
+
+# 统一解析编排（正文预览 + 洞察摘要/关键信息）
+parser:
+  enable: ${PARSER_ENABLE:-True}
+  cron: ${PARSER_CRON:-*/10 * * * *}
+  run_on_start: ${PARSER_RUN_ON_START:-True}
+  limit_per_run: ${PARSER_LIMIT_PER_RUN:-300}
+  days: ${PARSER_DAYS:-3}
+  workers: ${PARSER_WORKERS:-6}
+  # balanced | newest | hot
+  strategy: ${PARSER_STRATEGY:-balanced}
+  # 逗号分隔：wechat,rss,rsshub
+  source_types: ${PARSER_SOURCE_TYPES:-wechat,rss,rsshub}
+  max_per_feed: ${PARSER_MAX_PER_FEED:-0}
+  active_task_stale_minutes: ${PARSER_ACTIVE_TASK_STALE_MINUTES:-30}
+  round_robin: ${PARSER_ROUND_ROBIN:-True}
+  force_content: ${PARSER_FORCE_CONTENT:-False}
+  force_insights: ${PARSER_FORCE_INSIGHTS:-False}
+  queue_workers: ${PARSER_QUEUE_WORKERS:-2}
+  tasks_file: ${PARSER_TASKS_FILE:-data/parser_tasks.json}
+  # 低于该长度的正文视为无效，优先进入解析抓取
+  content_min_chars: ${PARSER_CONTENT_MIN_CHARS:-120}
+
+# 内置 RSSHub（作为 we-mp-rss 子服务）配置
+rsshub:
+  # 容器内访问地址（推荐保持默认：compose 服务名 rsshub）
+  internal_url: ${RSSHUB_INTERNAL_URL:-http://rsshub:1200}
+  # 前端展示/复制给用户的访问地址（可配公网域名）
+  public_url: ${RSSHUB_PUBLIC_URL:-http://localhost:1201}
+  # 请求超时（秒）
+  timeout: ${RSSHUB_TIMEOUT:-20}
+  # 说明：部分路由依赖浏览器渲染。compose 已内置 browserless，并通过 PUPPETEER_WS_ENDPOINT 自动接入。
+
+# 来源抓取配置
+source:
+  # 单个 RSS/RSSHub 请求超时秒数
+  fetch_timeout: ${SOURCE_FETCH_TIMEOUT:-20}
+  # 正文抓取请求超时（秒）
+  content_fetch_timeout: ${SOURCE_CONTENT_FETCH_TIMEOUT:-12}
+  # 正文最小长度阈值（小于此值视为无效正文）
+  content_min_text_length: ${SOURCE_CONTENT_MIN_TEXT_LENGTH:-140}
+  # 正文抓取缓存：成功结果缓存秒数
+  content_cache_ttl_seconds: ${SOURCE_CONTENT_CACHE_TTL_SECONDS:-21600}
+  # 正文抓取缓存：失败结果缓存秒数（防止重复打满上游）
+  content_cache_fail_ttl_seconds: ${SOURCE_CONTENT_CACHE_FAIL_TTL_SECONDS:-90}
+  # 正文抓取缓存最大条目数
+  content_cache_max_items: ${SOURCE_CONTENT_CACHE_MAX_ITEMS:-3000}
 
 # 合集/推送（生成待发送 outbox，机器人拉取后推送；推送实现由机器人负责）
 digest:

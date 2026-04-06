@@ -8,7 +8,7 @@ from core.auth import get_current_user
 from core.db import DB
 from core.insights import InsightsService
 from core.models.article_insight import ArticleInsight
-from core.queue import InsightsQueue
+from core.queue import InsightsQueue, PriorityInsightsQueue
 
 
 router = APIRouter(prefix="/insights", tags=["洞察"])
@@ -30,7 +30,7 @@ def _serialize_insight(insight: ArticleInsight) -> dict:
     }
 
 
-@router.get("/{article_id}", summary="获取文章洞察(摘要/标题/LLM拆解)")
+@router.get("/{article_id:path}", summary="获取文章洞察(摘要/标题/LLM拆解)")
 async def get_article_insights(
     article_id: str,
     include_llm: bool = Query(True, description="是否返回LLM拆解结果"),
@@ -45,12 +45,14 @@ async def get_article_insights(
         )
     # If caches missing, schedule background fill (do not block request).
     try:
+        auto_summary = bool(cfg.get("insights.auto_ai_summary", True))
         auto_kp = bool(cfg.get("insights.auto_key_points", True))
         auto_bd = bool(cfg.get("insights.auto_llm_breakdown", False))
+        missing_summary = auto_summary and not str(getattr(insight, "summary", "") or "").strip()
         missing_kp = auto_kp and not (getattr(insight, "key_points_json", None) or "")
         missing_bd = auto_bd and include_llm and not (getattr(insight, "llm_breakdown_json", None) or "")
-        if missing_kp or missing_bd:
-            InsightsQueue.add_task(service.ensure_cached, article_id)
+        if missing_summary or missing_kp or missing_bd:
+            PriorityInsightsQueue.add_task(service.ensure_cached, article_id)
     except Exception:
         pass
     data = _serialize_insight(insight)
@@ -59,7 +61,23 @@ async def get_article_insights(
     return success_response(data)
 
 
-@router.post("/{article_id}/basic", summary="生成/刷新基础洞察(摘要/一级二级标题)")
+@router.post("/{article_id:path}/warmup", summary="异步预热洞察缓存(摘要/关键信息/拆解)")
+async def warmup_article_insights(
+    article_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    service = InsightsService()
+    try:
+        PriorityInsightsQueue.add_task(service.ensure_cached, article_id)
+        return success_response({"article_id": article_id, "scheduled": True})
+    except Exception as e:
+        raise HTTPException(
+            status_code=fast_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50001, message=f"洞察预热入队失败: {str(e)}"),
+        )
+
+
+@router.post("/{article_id:path}/basic", summary="生成/刷新基础洞察(摘要/一级二级标题)")
 async def refresh_basic_insights(
     article_id: str,
     current_user: dict = Depends(get_current_user),
@@ -74,7 +92,23 @@ async def refresh_basic_insights(
     return success_response(_serialize_insight(insight))
 
 
-@router.post("/{article_id}/breakdown", summary="使用LLM生成全文拆解(最多三级)")
+@router.post("/{article_id:path}/summary", summary="使用LLM生成/刷新AI摘要")
+async def generate_ai_summary(
+    article_id: str,
+    force: bool = Query(False, description="强制重新生成(忽略缓存)"),
+    current_user: dict = Depends(get_current_user),
+):
+    service = InsightsService()
+    insight = await service.generate_ai_summary(article_id, force=force)
+    if not insight:
+        raise HTTPException(
+            status_code=fast_status.HTTP_404_NOT_FOUND,
+            detail=error_response(code=40401, message="文章不存在"),
+        )
+    return success_response(_serialize_insight(insight))
+
+
+@router.post("/{article_id:path}/breakdown", summary="使用LLM生成全文拆解(最多三级)")
 async def generate_llm_breakdown(
     article_id: str,
     force: bool = Query(False, description="强制重新生成(忽略缓存)"),
@@ -90,7 +124,7 @@ async def generate_llm_breakdown(
     return success_response(_serialize_insight(insight))
 
 
-@router.post("/{article_id}/key_points", summary="生成/刷新关键信息点(3-8条+高亮)")
+@router.post("/{article_id:path}/key_points", summary="生成/刷新关键信息点(3-8条+高亮)")
 async def generate_key_points(
     article_id: str,
     force: bool = Query(False, description="强制重新生成(忽略缓存)"),

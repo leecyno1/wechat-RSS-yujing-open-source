@@ -1,0 +1,1474 @@
+{
+  "version": 1,
+  "updated_at": "2026-03-24 19:16:37",
+  "list": [
+    {
+      "platform": "bbc",
+      "name": "BBC World",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "description": "BBC 世界新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC Business",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/business/rss.xml",
+      "description": "BBC 商业新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC Technology",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/technology/rss.xml",
+      "description": "BBC 科技新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian World",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/world/rss",
+      "description": "卫报世界新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Technology",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/uk/technology/rss",
+      "description": "卫报科技",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Business",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/uk/business/rss",
+      "description": "卫报商业",
+      "quick_add": true
+    },
+    {
+      "platform": "cnn",
+      "name": "CNN Top Stories",
+      "source_type": "rss",
+      "source_url": "http://rss.cnn.com/rss/edition.rss",
+      "description": "CNN 头条",
+      "quick_add": true
+    },
+    {
+      "platform": "cnn",
+      "name": "CNN World",
+      "source_type": "rss",
+      "source_url": "http://rss.cnn.com/rss/edition_world.rss",
+      "description": "CNN 世界",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR News",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1001/rss.xml",
+      "description": "NPR 新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR World",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1004/rss.xml",
+      "description": "NPR 世界",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Business",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1006/rss.xml",
+      "description": "NPR 商业",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Technology",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1019/rss.xml",
+      "description": "NPR 科技",
+      "quick_add": true
+    },
+    {
+      "platform": "cnbc",
+      "name": "CNBC Top News",
+      "source_type": "rss",
+      "source_url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+      "description": "CNBC 头条",
+      "quick_add": true
+    },
+    {
+      "platform": "cnbc",
+      "name": "CNBC World",
+      "source_type": "rss",
+      "source_url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",
+      "description": "CNBC 世界",
+      "quick_add": true
+    },
+    {
+      "platform": "cnbc",
+      "name": "CNBC Technology",
+      "source_type": "rss",
+      "source_url": "https://www.cnbc.com/id/19854910/device/rss/rss.html",
+      "description": "CNBC 科技",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "TechCrunch",
+      "source_type": "rss",
+      "source_url": "https://techcrunch.com/feed/",
+      "description": "TechCrunch",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "The Verge",
+      "source_type": "rss",
+      "source_url": "https://www.theverge.com/rss/index.xml",
+      "description": "The Verge",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "Engadget",
+      "source_type": "rss",
+      "source_url": "https://www.engadget.com/rss.xml",
+      "description": "Engadget",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "Wired",
+      "source_type": "rss",
+      "source_url": "https://www.wired.com/feed/rss",
+      "description": "Wired",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "Hacker News",
+      "source_type": "rss",
+      "source_url": "https://news.ycombinator.com/rss",
+      "description": "Hacker News",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "GitHub Blog",
+      "source_type": "rss",
+      "source_url": "https://github.blog/feed/",
+      "description": "GitHub 官方博客",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "Cloudflare Blog",
+      "source_type": "rss",
+      "source_url": "https://blog.cloudflare.com/rss/",
+      "description": "Cloudflare 官方博客",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "Kubernetes Blog",
+      "source_type": "rss",
+      "source_url": "https://kubernetes.io/feed.xml",
+      "description": "Kubernetes 官方博客",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "知乎热榜",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/hot",
+      "description": "知乎热榜（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "知乎日报",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/daily",
+      "description": "知乎日报（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "心理学·哲学·批判性思维",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/AndyLee",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "笔戈科技",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/bigertech",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "张佳玮写字的地方",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/zhangjiawei",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "小道消息",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/WebNotes",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "道哥的黑板报",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/taosay",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "MacTalk",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/mactalk",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "文明之光",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/wujun",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "zhihu",
+      "name": "智能单元",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/zhihu/zhuanlan/intelligentunit",
+      "description": "知乎专栏（已校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "今日话题",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/8152922548",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "A股财经博主",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/7966461251",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "徒步三萬里",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/4857977486",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "股痴Luna",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/2206860156",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "麦睿投资",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/6421604897",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "格多巴卡",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/5642562501",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "黄金投资新视野",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/9105992305",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "华夏ETF",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/3951090421",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "大道无形我有型",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/1247347556",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "xueqiu",
+      "name": "蒋炜的投资思考",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/xueqiu/user/9962554712",
+      "description": "雪球博主（浏览器校验）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "爱济南",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAxxSYh0HZTpWx8IlvblXw83Ls372rg2DgjTxivSo9U_o",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "新福建",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAATKGnSmfRr444PXriI6oF75EcyMGATDSKSzQTvsDcPas",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "大象新闻",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAQKFZEubEO46ZUsXCeIsqvS6AoMa5Rz6AKfE5Yo-j_t8sJqXMigbXE5A_NcmSD3Wx",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "金融界",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAsamoDupqFwZFXmkFbrQpbvUMVxUwPMPdiBpm10HU2l0",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "凤凰卫视",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAsvct5BnM3HV05GF3X0U5uVK3NfYx3biM2-qheD04sX8",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "懂车时间",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAvmhua_mS_UKut_v2ETUNJeNBy38t9bPACepGLg-JwZg",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "作家杨文山",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAYMrioUVoTGJN5JwTnvJK7Io_vrWFmsQAHDuw7J3ZQtWwmMe4TOLVyuR1MpRWz6Wu",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "人生路上美随行",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAm6AMLDUmPtB6Zi1-3JhjMMRlqBg4OxTn1njzFqrJnuYy1ivBuksuQRZ2hGSlgod5",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "驾享来电",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAA1pZNV0zb-MJvF3c5NASpaKnr8TtF_Gt_jwr0Qf3F_rk",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "toutiao",
+      "name": "君子游网上围棋教室",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/toutiao/user/token/MS4wLjABAAAAFMpiK-z_qGhch62yg5ETEXDdJL0hU-LabCDTBp31ZA8",
+      "description": "头条作者（浏览器抓取 token）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "荔枝新闻",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/1796087453",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "封面新闻",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/1496814565",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "CCTV4",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/2039753857",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "唐史主任司马迁",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/2014433131",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "但斌",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/1249424622",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "刘纪鹏",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/1296760080",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "洪榕",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/2144596567",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "科技小辛",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/1595443924",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "群伟伟买基金",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/7169812253",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "weibo",
+      "name": "基金致富之路",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/weibo/user/5729091448",
+      "description": "微博博主（MediaCrawlerPro 抓取）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "星座屋yy（百家号）",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E6%98%9F%E5%BA%A7%E5%B1%8Byy%20%E7%99%BE%E5%AE%B6%E5%8F%B7",
+      "description": "百家号作者检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "海卖云享国外媒体发稿（百家号）",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E6%B5%B7%E5%8D%96%E4%BA%91%E4%BA%AB%E5%9B%BD%E5%A4%96%E5%AA%92%E4%BD%93%E5%8F%91%E7%A8%BF%20%E7%99%BE%E5%AE%B6%E5%8F%B7",
+      "description": "百家号作者检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "百家号·财经精选",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E7%99%BE%E5%AE%B6%E5%8F%B7%20%E8%B4%A2%E7%BB%8F",
+      "description": "百家号检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "百家号·科技精选",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E7%99%BE%E5%AE%B6%E5%8F%B7%20%E7%A7%91%E6%8A%80",
+      "description": "百家号检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "百家号·商业精选",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E7%99%BE%E5%AE%B6%E5%8F%B7%20%E5%95%86%E4%B8%9A",
+      "description": "百家号检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "baijiahao",
+      "name": "百家号·汽车精选",
+      "source_type": "rsshub",
+      "rsshub_route_template": "/baidu/search/%E7%99%BE%E5%AE%B6%E5%8F%B7%20%E6%B1%BD%E8%BD%A6",
+      "description": "百家号检索聚合（可用兜底）",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC UK",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/uk/rss.xml",
+      "description": "BBC 英国新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC Health",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/health/rss.xml",
+      "description": "BBC 健康",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC Science & Environment",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+      "description": "BBC 科学与环境",
+      "quick_add": true
+    },
+    {
+      "platform": "bbc",
+      "name": "BBC Entertainment & Arts",
+      "source_type": "rss",
+      "source_url": "https://feeds.bbci.co.uk/news/entertainment_and_arts/rss.xml",
+      "description": "BBC 文娱",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Politics",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/politics/rss",
+      "description": "卫报政治",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Environment",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/environment/rss",
+      "description": "卫报环境",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Science",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/science/rss",
+      "description": "卫报科学",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Culture",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/culture/rss",
+      "description": "卫报文化",
+      "quick_add": true
+    },
+    {
+      "platform": "guardian",
+      "name": "The Guardian Sport",
+      "source_type": "rss",
+      "source_url": "https://www.theguardian.com/uk/sport/rss",
+      "description": "卫报体育",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Politics",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1014/rss.xml",
+      "description": "NPR 政治",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Science",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1007/rss.xml",
+      "description": "NPR 科学",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Health",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1128/rss.xml",
+      "description": "NPR 健康",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Culture",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1045/rss.xml",
+      "description": "NPR 文化",
+      "quick_add": true
+    },
+    {
+      "platform": "npr",
+      "name": "NPR Music",
+      "source_type": "rss",
+      "source_url": "https://feeds.npr.org/1039/rss.xml",
+      "description": "NPR 音乐",
+      "quick_add": true
+    },
+    {
+      "platform": "tech",
+      "name": "CoinDesk",
+      "source_type": "rss",
+      "source_url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+      "description": "CoinDesk 加密新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "global_news",
+      "name": "BBC News - World",
+      "source_type": "rss",
+      "source_url": "http://feeds.bbci.co.uk/news/world/rss.xml",
+      "description": "来自 awesome-rss-feeds News 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_news",
+      "name": "World News Headlines, Latest International News, World Breaking News - Times of India",
+      "source_type": "rss",
+      "source_url": "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms",
+      "description": "来自 awesome-rss-feeds News 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "CNET News",
+      "source_type": "rss",
+      "source_url": "https://www.cnet.com/rss/news/",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "Lifehacker",
+      "source_type": "rss",
+      "source_url": "https://lifehacker.com/rss",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "Mashable",
+      "source_type": "rss",
+      "source_url": "http://feeds.mashable.com/Mashable",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "ReadWrite",
+      "source_type": "rss",
+      "source_url": "https://readwrite.com/feed/",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "Stratechery by Ben Thompson",
+      "source_type": "rss",
+      "source_url": "http://stratechery.com/feed/",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "TechCrunch",
+      "source_type": "rss",
+      "source_url": "http://feeds.feedburner.com/TechCrunch",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "The Keyword",
+      "source_type": "rss",
+      "source_url": "https://www.blog.google/rss/",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_tech",
+      "name": "The Next Web",
+      "source_type": "rss",
+      "source_url": "https://thenextweb.com/feed/",
+      "description": "来自 awesome-rss-feeds Tech 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Breaking News on Seeking Alpha",
+      "source_type": "rss",
+      "source_url": "https://seekingalpha.com/market_currents.xml",
+      "description": "来自 awesome-rss-feeds Business & Economy 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Economic Times",
+      "source_type": "rss",
+      "source_url": "https://economictimes.indiatimes.com/rssfeedsdefault.cms",
+      "description": "来自 awesome-rss-feeds Business & Economy 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Fortune",
+      "source_type": "rss",
+      "source_url": "https://fortune.com/feed",
+      "description": "来自 awesome-rss-feeds Business & Economy 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "The Blog of Author Tim Ferriss",
+      "source_type": "rss",
+      "source_url": "https://tim.blog/feed/",
+      "description": "来自 awesome-rss-feeds Business & Economy 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Yahoo Finance",
+      "source_type": "rss",
+      "source_url": "https://finance.yahoo.com/news/rssindex",
+      "description": "来自 awesome-rss-feeds Business & Economy 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Coding Horror",
+      "source_type": "rss",
+      "source_url": "https://feeds.feedburner.com/codinghorror",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Dan Abramov's Overreacted Blog RSS Feed",
+      "source_type": "rss",
+      "source_url": "https://overreacted.io/rss.xml",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Facebook Engineering",
+      "source_type": "rss",
+      "source_url": "https://engineering.fb.com/feed/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "GitLab",
+      "source_type": "rss",
+      "source_url": "https://about.gitlab.com/atom.xml",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Google Developers Blog",
+      "source_type": "rss",
+      "source_url": "http://feeds.feedburner.com/GDBcode",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Java, SQL and jOOQ.",
+      "source_type": "rss",
+      "source_url": "https://blog.jooq.org/feed",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "JetBrains Blog",
+      "source_type": "rss",
+      "source_url": "https://blog.jetbrains.com/feed",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Joel on Software",
+      "source_type": "rss",
+      "source_url": "https://www.joelonsoftware.com/feed/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Martin Fowler",
+      "source_type": "rss",
+      "source_url": "https://martinfowler.com/feed.atom",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Overflow - Buffer Resources",
+      "source_type": "rss",
+      "source_url": "https://buffer.com/resources/overflow/rss/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Programming – The Crazy Programmer",
+      "source_type": "rss",
+      "source_url": "https://www.thecrazyprogrammer.com/category/programming/feed",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Robert Heaton | Blog",
+      "source_type": "rss",
+      "source_url": "https://robertheaton.com/feed.xml",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Scott Hanselman's Blog",
+      "source_type": "rss",
+      "source_url": "http://feeds.hanselman.com/ScottHanselman",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Scripting News",
+      "source_type": "rss",
+      "source_url": "http://scripting.com/rss.xml",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Slack Engineering",
+      "source_type": "rss",
+      "source_url": "https://slack.engineering/feed",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "SoundCloud Backstage Blog",
+      "source_type": "rss",
+      "source_url": "https://developers.soundcloud.com/blog/blog.rss",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Spotify Engineering",
+      "source_type": "rss",
+      "source_url": "https://labs.spotify.com/feed/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Stack Abuse",
+      "source_type": "rss",
+      "source_url": "https://stackabuse.com/rss/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "Stack Overflow Blog",
+      "source_type": "rss",
+      "source_url": "https://stackoverflow.blog/feed/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_programming",
+      "name": "The 6 Figure Developer",
+      "source_type": "rss",
+      "source_url": "http://6figuredev.com/feed/rss/",
+      "description": "来自 awesome-rss-feeds Programming 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "AVC",
+      "source_type": "rss",
+      "source_url": "https://avc.com/feed/",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Feld Thoughts",
+      "source_type": "rss",
+      "source_url": "https://feld.com/feed",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Hacker News: Front Page",
+      "source_type": "rss",
+      "source_url": "https://hnrss.org/frontpage",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Inside Intercom",
+      "source_type": "rss",
+      "source_url": "https://www.intercom.com/blog/feed",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Product Hunt — The best new products, every day",
+      "source_type": "rss",
+      "source_url": "https://www.producthunt.com/feed",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Quick Sprout",
+      "source_type": "rss",
+      "source_url": "https://www.quicksprout.com/rss",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_startups",
+      "name": "Steve Blank",
+      "source_type": "rss",
+      "source_url": "https://steveblank.com/feed/",
+      "description": "来自 awesome-rss-feeds Startups 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Afford Anything",
+      "source_type": "rss",
+      "source_url": "https://affordanything.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Budgets Are Sexy",
+      "source_type": "rss",
+      "source_url": "https://feeds2.feedburner.com/budgetsaresexy",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Financial Samurai",
+      "source_type": "rss",
+      "source_url": "https://www.financialsamurai.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Frugalwoods",
+      "source_type": "rss",
+      "source_url": "https://feeds.feedburner.com/Frugalwoods",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Good Financial Cents®",
+      "source_type": "rss",
+      "source_url": "https://www.goodfinancialcents.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "I Will Teach You To Be Rich",
+      "source_type": "rss",
+      "source_url": "https://www.iwillteachyoutoberich.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Learn To Trade The Market",
+      "source_type": "rss",
+      "source_url": "https://www.learntotradethemarket.com/feed",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Making Sense Of Cents",
+      "source_type": "rss",
+      "source_url": "https://www.makingsenseofcents.com/feed",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Millennial Money",
+      "source_type": "rss",
+      "source_url": "https://millennialmoney.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Money Saving Mom®",
+      "source_type": "rss",
+      "source_url": "https://moneysavingmom.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Money Under 30",
+      "source_type": "rss",
+      "source_url": "https://www.moneyunder30.com/feed",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "MoneyNing",
+      "source_type": "rss",
+      "source_url": "http://feeds.feedburner.com/MoneyNing",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Oblivious Investor",
+      "source_type": "rss",
+      "source_url": "https://obliviousinvestor.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "SavingAdvice.com Blog",
+      "source_type": "rss",
+      "source_url": "https://www.savingadvice.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Side Hustle Nation",
+      "source_type": "rss",
+      "source_url": "https://www.sidehustlenation.com/feed",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Well Kept Wallet",
+      "source_type": "rss",
+      "source_url": "https://wellkeptwallet.com/feed/",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "global_finance",
+      "name": "Wise Bread",
+      "source_type": "rss",
+      "source_url": "http://feeds.killeraces.com/wisebread",
+      "description": "来自 awesome-rss-feeds Personal finance 推荐列表",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "少数派",
+      "source_type": "rss",
+      "source_url": "https://sspai.com/feed",
+      "description": "少数派 RSS",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "36氪",
+      "source_type": "rss",
+      "source_url": "https://36kr.com/feed",
+      "description": "36氪 RSS",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "爱范儿",
+      "source_type": "rss",
+      "source_url": "https://www.ifanr.com/feed",
+      "description": "爱范儿 RSS",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "阮一峰网络日志",
+      "source_type": "rss",
+      "source_url": "https://www.ruanyifeng.com/blog/atom.xml",
+      "description": "技术专栏",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "酷壳（历史）",
+      "source_type": "rss",
+      "source_url": "https://coolshell.cn/feed",
+      "description": "技术博客",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "Solidot",
+      "source_type": "rss",
+      "source_url": "https://www.solidot.org/index.rss",
+      "description": "科技资讯",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "开源中国资讯",
+      "source_type": "rss",
+      "source_url": "https://www.oschina.net/news/rss",
+      "description": "开源资讯",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "InfoQ 中国",
+      "source_type": "rss",
+      "source_url": "https://www.infoq.cn/feed",
+      "description": "架构与工程实践",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "稀土掘金",
+      "source_type": "rss",
+      "source_url": "https://juejin.cn/rss",
+      "description": "开发者内容",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "博客园",
+      "source_type": "rss",
+      "source_url": "https://www.cnblogs.com/rss/",
+      "description": "开发者社区",
+      "quick_add": true
+    },
+    {
+      "platform": "china_tech",
+      "name": "V2EX 热门",
+      "source_type": "rss",
+      "source_url": "https://www.v2ex.com/index.xml",
+      "description": "开发者社区",
+      "quick_add": true
+    },
+    {
+      "platform": "china_product",
+      "name": "人人都是产品经理",
+      "source_type": "rss",
+      "source_url": "https://www.woshipm.com/feed",
+      "description": "产品与运营",
+      "quick_add": true
+    },
+    {
+      "platform": "china_finance",
+      "name": "FT 中文网",
+      "source_type": "rss",
+      "source_url": "https://www.ftchinese.com/rss/news",
+      "description": "国际财经与商业",
+      "quick_add": true
+    },
+    {
+      "platform": "china_news",
+      "name": "新浪新闻国内",
+      "source_type": "rss",
+      "source_url": "https://rss.sina.com.cn/news/china/focus15.xml",
+      "description": "国内新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "china_news",
+      "name": "新浪新闻国际",
+      "source_type": "rss",
+      "source_url": "https://rss.sina.com.cn/news/world/focus15.xml",
+      "description": "国际新闻",
+      "quick_add": true
+    },
+    {
+      "platform": "aljazeera",
+      "name": "Al Jazeera World",
+      "source_type": "rss",
+      "source_url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "description": "半岛电视台全球新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "cbs",
+      "name": "CBS News Top",
+      "source_type": "rss",
+      "source_url": "https://www.cbsnews.com/latest/rss/main",
+      "description": "CBS 头条新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "cbs",
+      "name": "CBS News World",
+      "source_type": "rss",
+      "source_url": "https://www.cbsnews.com/latest/rss/world",
+      "description": "CBS 世界新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "fox",
+      "name": "Fox News Latest",
+      "source_type": "rss",
+      "source_url": "https://moxie.foxnews.com/google-publisher/latest.xml",
+      "description": "Fox 最新新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "fox",
+      "name": "Fox News World",
+      "source_type": "rss",
+      "source_url": "https://moxie.foxnews.com/google-publisher/world.xml",
+      "description": "Fox 世界新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "skynews",
+      "name": "Sky News World",
+      "source_type": "rss",
+      "source_url": "https://feeds.skynews.com/feeds/rss/world.xml",
+      "description": "Sky 世界新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "skynews",
+      "name": "Sky News UK",
+      "source_type": "rss",
+      "source_url": "https://feeds.skynews.com/feeds/rss/uk.xml",
+      "description": "Sky 英国新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "euronews",
+      "name": "Euronews Top",
+      "source_type": "rss",
+      "source_url": "https://www.euronews.com/rss?format=mrss",
+      "description": "Euronews 欧洲新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "abcnews",
+      "name": "ABC International",
+      "source_type": "rss",
+      "source_url": "https://abcnews.go.com/abcnews/internationalheadlines",
+      "description": "ABC 国际新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "nbc",
+      "name": "NBC News Top",
+      "source_type": "rss",
+      "source_url": "https://feeds.nbcnews.com/nbcnews/public/news",
+      "description": "NBC 头条新闻",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "zdnet",
+      "name": "ZDNet News",
+      "source_type": "rss",
+      "source_url": "https://www.zdnet.com/news/rss.xml",
+      "description": "ZDNet 科技新闻",
+      "quick_add": true,
+      "tags": [
+        "科技",
+        "门户"
+      ]
+    },
+    {
+      "platform": "mashable",
+      "name": "Mashable All",
+      "source_type": "rss",
+      "source_url": "https://mashable.com/feeds/rss/all",
+      "description": "Mashable 全部内容",
+      "quick_add": true,
+      "tags": [
+        "科技",
+        "门户"
+      ]
+    },
+    {
+      "platform": "register",
+      "name": "The Register",
+      "source_type": "rss",
+      "source_url": "https://www.theregister.com/headlines.atom",
+      "description": "The Register 技术新闻",
+      "quick_add": true,
+      "tags": [
+        "科技",
+        "门户"
+      ]
+    },
+    {
+      "platform": "9to5mac",
+      "name": "9to5Mac",
+      "source_type": "rss",
+      "source_url": "https://9to5mac.com/feed/",
+      "description": "9to5Mac 苹果生态",
+      "quick_add": true,
+      "tags": [
+        "科技",
+        "门户"
+      ]
+    },
+    {
+      "platform": "tnw",
+      "name": "The Next Web",
+      "source_type": "rss",
+      "source_url": "https://thenextweb.com/feed",
+      "description": "TNW 科技与创业",
+      "quick_add": true,
+      "tags": [
+        "科技",
+        "门户"
+      ]
+    },
+    {
+      "platform": "vox",
+      "name": "Vox",
+      "source_type": "rss",
+      "source_url": "https://www.vox.com/rss/index.xml",
+      "description": "Vox 深度报道",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    },
+    {
+      "platform": "time",
+      "name": "TIME",
+      "source_type": "rss",
+      "source_url": "https://time.com/feed/",
+      "description": "TIME 新闻周刊",
+      "quick_add": true,
+      "tags": [
+        "新闻",
+        "门户"
+      ]
+    }
+  ]
+}

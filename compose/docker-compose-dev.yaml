@@ -1,4 +1,29 @@
 services:
+  rsshub-browserless:
+    image: browserless/chrome:latest
+    container_name: we-mp-rss-dev-rsshub-browserless
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - CONCURRENT=5
+      - TIMEOUT=300000
+      - PREBOOT_CHROME=true
+
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: we-mp-rss-dev-rsshub
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - ALLOW_ORIGIN=*
+      - TZ=Asia/Shanghai
+      - PUPPETEER_WS_ENDPOINT=ws://rsshub-browserless:3000
+    ports:
+      - "1201:1200"
+    depends_on:
+      - rsshub-browserless
+
   api:
     image: ghcr.io/rachelos/base-full:latest
     container_name: we-mp-rss-dev-api
@@ -14,6 +39,8 @@ services:
       - AUTO_RELOAD=True
       - THREADS=1
       - INSTALL=False
+      - RSSHUB_INTERNAL_URL=http://rsshub:1200
+      - RSSHUB_PUBLIC_URL=http://localhost:1201
       - SILICONFLOW_API_URL=https://api.siliconflow.cn/v1
       - SILICONFLOW_MODEL=Qwen/Qwen3-30B-A3B
       - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
@@ -21,6 +48,8 @@ services:
       - ..:/src
       - ../data:/src/data
     command: bash -lc "source /app/$(uname -m)/bin/activate && test -f config.yaml || cp config.example.yaml config.yaml && python3 main.py -job True -init True"
+    depends_on:
+      - rsshub
 
   ui:
     image: docker.1ms.run/node:20-bookworm-slim

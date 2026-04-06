@@ -25,3 +25,26 @@ export const updateTag = (id: string, data: TagCreate) => {
 export const deleteTag = (id: string) => {
   return http.delete(`/wx/tags/${id}`)
 }
+
+export interface TagPlazaItem extends Tag {
+  user_id?: string | null
+  creator_username?: string
+  creator_nickname?: string
+  creator_display?: string
+  mp_count?: number
+  is_mine?: boolean
+}
+
+export const listTagPlaza = (params?: { offset?: number; limit?: number; keyword?: string }) => {
+  return http.get<{ list: TagPlazaItem[]; total: number }>('/wx/tags/plaza', {
+    params: {
+      offset: params?.offset || 0,
+      limit: params?.limit || 20,
+      keyword: params?.keyword || ''
+    }
+  })
+}
+
+export const useTagFromPlaza = (tagId: string) => {
+  return http.post(`/wx/tags/plaza/${tagId}/use`)
+}

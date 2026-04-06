@@ -160,6 +160,25 @@ def _queue_update_feed(feed_id: str, start_page: int = 0, end_page: int = 1) -> 
         pass
 
 
+def _priority_refresh_count() -> int:
+    try:
+        value = int(cfg.get("gather.priority_refresh_count", 8) or 8)
+    except Exception:
+        value = 8
+    return max(1, min(32, value))
+
+
+def _enqueue_feed_refresh(feed_id: str, start_page: int, end_page: int, *, priority: bool = False) -> bool:
+    try:
+        from core.queue import PriorityTaskQueue, TaskQueue
+
+        queue = PriorityTaskQueue if priority else TaskQueue
+        queue.add_task(_queue_update_feed, str(feed_id), max(0, int(start_page or 0)), max(1, int(end_page or 1)))
+        return True
+    except Exception:
+        return False
+
+
 def _load_plaza_data() -> dict:
     path = str(cfg.get("plaza.file", "data/plaza_mps.json") or "data/plaza_mps.json")
     try:
@@ -174,6 +193,16 @@ def _load_plaza_data() -> dict:
 
 
 _PLAZA_LOCK = threading.Lock()
+
+_PLAZA_TAG_RULES = [
+    ("AI", ["ai", "人工智能", "大模型", "chatgpt", "openai", "agent", "deepseek", "claude"]),
+    ("科技", ["科技", "tech", "互联网", "软件", "开发", "程序", "芯片", "半导体", "云", "数字化"]),
+    ("财经", ["财经", "金融", "资本", "投资", "基金", "股票", "券商", "宏观", "量化", "交易"]),
+    ("商业", ["商业", "消费", "品牌", "公司", "企业", "创业", "营销", "管理"]),
+    ("新闻", ["新闻", "媒体", "日报", "时评", "观察", "头条", "晚报"]),
+    ("教育", ["教育", "读书", "学习", "培训", "知识"]),
+    ("医疗", ["医疗", "健康", "医药", "医院", "医生"]),
+]
 
 
 def _plaza_file_path() -> str:
@@ -210,6 +239,77 @@ def _with_plaza_file_lock(fn):
         return fn()
 
 
+def _infer_plaza_tags(*parts: Any) -> list[str]:
+    hay = " ".join([str(x or "") for x in parts]).strip().lower()
+    tags: list[str] = []
+    for label, keywords in _PLAZA_TAG_RULES:
+        if any(str(kw).lower() in hay for kw in keywords):
+            tags.append(label)
+    if not tags:
+        tags.append("综合")
+    return tags[:3]
+
+
+def _is_wechat_feed(feed: Any) -> bool:
+    if feed is None:
+        return False
+    feed_id = str(getattr(feed, "id", "") or "").strip()
+    source_type = str(getattr(feed, "source_type", "") or "").strip().lower()
+    source_platform = str(getattr(feed, "source_platform", "") or "").strip().lower()
+    fakeid = str(getattr(feed, "faker_id", "") or "").strip()
+    if feed_id.startswith("SRC_"):
+        return False
+    if source_type not in ("", "wechat"):
+        return False
+    if source_platform not in ("", "wechat"):
+        return False
+    return bool(_normalize_fakeid(fakeid))
+
+
+def _is_wechat_plaza_item(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    feed_id = str(item.get("feed_id") or "").strip()
+    platform = str(item.get("platform") or "wechat").strip().lower() or "wechat"
+    mp_id = str(item.get("mp_id") or "").strip()
+    if feed_id.startswith("SRC_"):
+        return False
+    if platform != "wechat":
+        return False
+    if mp_id:
+        return bool(_normalize_fakeid(mp_id))
+    return feed_id.startswith("MP_") or feed_id == ""
+
+
+def _cleanup_plaza_non_wechat_items() -> dict:
+    def _apply() -> dict:
+        data = _load_plaza_data()
+        changed = False
+        categories = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(categories, list):
+            return {"removed": 0, "total": 0}
+        total = 0
+        removed = 0
+        for cat in categories:
+            if not isinstance(cat, dict):
+                continue
+            items = cat.get("items")
+            if not isinstance(items, list):
+                continue
+            total += len(items)
+            filtered = [it for it in items if _is_wechat_plaza_item(it)]
+            if len(filtered) != len(items):
+                cat["items"] = filtered
+                removed += len(items) - len(filtered)
+                changed = True
+        if changed:
+            _plaza_write(data)
+        return {"removed": removed, "total": total}
+
+    with _PLAZA_LOCK:
+        return _with_plaza_file_lock(_apply)
+
+
 def _plaza_upsert_item(item: dict) -> None:
     """Upsert a plaza item into the 'community' category; best-effort persistence."""
     if not isinstance(item, dict):
@@ -220,6 +320,17 @@ def _plaza_upsert_item(item: dict) -> None:
     feed_id = str(item.get("feed_id") or "").strip()
     mp_id = str(item.get("mp_id") or "").strip()
     name_key = name.lower()
+    add_count = int(item.get("add_count") or 0)
+    platform = str(item.get("platform") or "wechat").strip().lower() or "wechat"
+    base_tags = [str(x).strip() for x in (item.get("tags") or []) if str(x).strip()]
+    if not base_tags:
+        base_tags = _infer_plaza_tags(name, item.get("desc") or "", item.get("kw") or "")
+    normalized_item = {
+        **item,
+        "platform": platform,
+        "tags": base_tags[:3],
+        "add_count": max(0, add_count),
+    }
 
     def _apply():
         data = _load_plaza_data()
@@ -257,12 +368,26 @@ def _plaza_upsert_item(item: dict) -> None:
                 break
 
         if found is None:
-            items.append(item)
+            found = normalized_item.copy()
+            items.append(found)
         else:
-            found.update({k: v for k, v in item.items() if v not in (None, "", [])})
+            found.update({k: v for k, v in normalized_item.items() if v not in (None, "", [])})
+            existing_count = int(found.get("add_count") or 0)
+            found["add_count"] = max(existing_count, normalized_item["add_count"])
+            existing_tags = [str(x).strip() for x in (found.get("tags") or []) if str(x).strip()]
+            if existing_tags:
+                found["tags"] = existing_tags[:3]
+        if not found.get("created_at"):
+            found["created_at"] = str(normalized_item.get("updated_at") or datetime.now().isoformat())
 
         try:
-            items.sort(key=lambda x: str(x.get("updated_at") or x.get("created_at") or ""), reverse=True)
+            items.sort(
+                key=lambda x: (
+                    int(x.get("add_count") or 0),
+                    str(x.get("updated_at") or x.get("created_at") or ""),
+                ),
+                reverse=True,
+            )
         except Exception:
             pass
 
@@ -315,6 +440,10 @@ async def get_plaza(
     limit: int = Query(500, ge=1, le=2000),
     current_user: dict = Depends(get_current_user),
 ):
+    try:
+        _cleanup_plaza_non_wechat_items()
+    except Exception:
+        pass
     data = _load_plaza_data()
     q = (kw or "").strip().lower()
     if not q:
@@ -367,7 +496,7 @@ async def search_mp(
     except Exception as e:
         print(f"搜索公众号错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message=f"搜索公众号失败,请重新扫码授权！",
@@ -376,7 +505,7 @@ async def search_mp(
 
 @router.get("", summary="获取公众号列表")
 async def get_mps(
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     kw: str = Query(""),
     scope: str = Query("mine", description="mine|all; all仅管理员可用"),
@@ -424,7 +553,7 @@ async def get_mps(
     except Exception as e:
         print(f"获取公众号列表错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="获取公众号列表失败"
@@ -441,7 +570,6 @@ async def update_mps(
     session = DB.get_session()
     try:
         from core.models.feed import Feed
-        from core.queue import TaskQueue
 
         if str(mp_id).strip().lower() == "all":
             # One-click refresh: enqueue updates for all feeds the current user subscribed to.
@@ -452,19 +580,22 @@ async def update_mps(
                 .filter(UserSubscription.user_id == user_id)
                 .filter(Feed.faker_id.isnot(None))
                 .filter(Feed.faker_id != "")
+                .order_by(Feed.update_time.desc(), Feed.created_at.desc())
             )
             feeds = query.all()
             if not feeds:
                 return success_response({"queued": 0, "message": "当前用户暂无订阅公众号"})
 
             queued = 0
-            for f in feeds:
-                try:
-                    TaskQueue.add_task(_queue_update_feed, str(f.id), int(start_page or 0), int(end_page or 1))
+            priority_queued = 0
+            priority_count = _priority_refresh_count()
+            for idx, f in enumerate(feeds):
+                is_priority = idx < priority_count
+                if _enqueue_feed_refresh(str(f.id), int(start_page or 0), int(end_page or 1), priority=is_priority):
                     queued += 1
-                except Exception:
-                    continue
-            return success_response({"queued": queued, "total": len(feeds)})
+                    if is_priority:
+                        priority_queued += 1
+            return success_response({"queued": queued, "total": len(feeds), "priority_queued": priority_queued})
 
         # 非管理员仅允许更新自己订阅的公众号，避免公域滥用
         if not _can_manage_feeds(current_user):
@@ -476,80 +607,51 @@ async def update_mps(
                 .scalar()
             )
             if not ok:
-                return error_response(code=40301, message="无权限更新该公众号（未订阅）")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=error_response(code=40301, message="无权限更新该公众号（未订阅）"),
+                )
         mp = session.query(Feed).filter(Feed.id == mp_id).first()
         if not mp:
-           return error_response(
-                    code=40401,
-                    message="请选择一个公众号"
-                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_response(code=40401, message="请选择一个公众号"),
+            )
         biz = _normalize_fakeid(mp.faker_id)
         if not biz:
-            return error_response(
-                code=40403,
-                message="该订阅缺少可用的fakeid，无法更新文章（请通过“搜索公众号”添加或检查导入数据）",
-                data={"faker_id": mp.faker_id},
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=error_response(
+                    code=40403,
+                    message="该订阅缺少可用的fakeid，无法更新文章（请通过“搜索公众号”添加或检查导入数据）",
+                    data={"faker_id": mp.faker_id},
+                ),
             )
         if mp.faker_id != biz:
             mp.faker_id = biz
             session.commit()
-        import time
         sync_interval=cfg.get("sync_interval",60)
         should_skip, time_span = _should_skip_sync(mp, int(sync_interval or 60))
         if should_skip:
-           return error_response(
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=error_response(
                     code=40402,
                     message="请不要频繁更新操作",
-                    data={"time_span":time_span}
-                )
-        result=[]    
-        def UpArt(mp):
-            from core.wx import WxGather
-            from core.insights import InsightsService
-            from core.models.article import Article
-            from core.db import DB as _DB
-            wx=WxGather().Model()
-            wx.fast_mode = True
-            since_ts = None
-            try:
-                grace = int(cfg.get("gather.incremental_grace_seconds", 3600) or 3600)
-                s2 = _DB.get_session()
-                last_ts = s2.query(func.max(Article.publish_time)).filter(Article.mp_id == mp.id).scalar() or 0
-                last_ts = int(last_ts or 0)
-                if last_ts > 0:
-                    since_ts = max(0, last_ts - max(0, grace))
-            except Exception:
-                since_ts = None
-            wx.get_Articles(
-                biz,
-                Mps_id=mp.id,
-                Mps_title=mp.mp_name,
-                CallBack=UpdateArticle,
-                start_page=start_page,
-                MaxPage=end_page,
-                interval=0,
-                since_ts=since_ts,
+                    data={"time_span": time_span},
+                ),
             )
-            result=wx.articles
-            try:
-                if bool(cfg.get("insights.prewarm_on_update", True)):
-                    days = int(cfg.get("insights.prewarm_days", 3))
-                    limit = int(cfg.get("insights.prewarm_limit", 120))
-                    InsightsService().ensure_mp_recent_cached(mp.id, days=days, limit=limit)
-            except Exception:
-                pass
-        import threading
-        threading.Thread(target=UpArt,args=(mp,)).start()
+        _enqueue_feed_refresh(str(mp.id), int(start_page or 0), int(end_page or 1), priority=True)
         return success_response({
             "time_span":time_span,
-            "list":result,
-            "total":len(result),
+            "list":[],
+            "total":0,
             "mps":mp
         })
     except Exception as e:
         print(f"更新公众号文章: {str(e)}",e)
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message=f"更新公众号文章{str(e)}"
@@ -567,17 +669,19 @@ async def get_mp(
         mp = session.query(Feed).filter(Feed.id == mp_id).first()
         if not mp:
             raise HTTPException(
-                status_code=status.HTTP_201_CREATED,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=error_response(
                     code=40401,
                     message="公众号不存在"
                 )
             )
         return success_response(mp)
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"获取公众号详情错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="获取公众号详情失败"
@@ -589,24 +693,34 @@ async def get_mp_by_article(
     current_user: dict = Depends(get_current_user)
 ):
     try:
+        if "mp.weixin.qq.com" not in str(url or ""):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_response(
+                    code=40001,
+                    message="请输入正确的公众号文章链接",
+                ),
+            )
         info =await WXArticleFetcher().async_get_article_content(url)
         
         if not info:
             raise HTTPException(
-                status_code=status.HTTP_201_CREATED,
+                status_code=status.HTTP_404_NOT_FOUND,
                 detail=error_response(
                     code=40401,
                     message="公众号不存在"
                 )
             )
         return success_response(info)
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"获取公众号详情错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
-                message="请输入正确的公众号文章链接"
+                message="解析公众号文章链接失败"
             )
         )
 
@@ -683,8 +797,14 @@ async def add_mp(
             if not sub:
                 session.add(UserSubscription(user_id=user_id, feed_id=feed.id, created_at=now, updated_at=now))
                 session.commit()
+            sub_count = (
+                session.query(func.count(UserSubscription.id))
+                .filter(UserSubscription.feed_id == feed.id)
+                .scalar()
+            ) or 0
         except Exception:
             session.rollback()
+            sub_count = 0
         # Persist into plaza (community) so "订阅广场" can grow over time.
         try:
             _plaza_upsert_item(
@@ -692,10 +812,12 @@ async def add_mp(
                     "name": feed.mp_name or mp_name,
                     "kw": feed.mp_name or mp_name,
                     "desc": feed.mp_intro or mp_intro or "",
-                    "tags": ["用户添加"],
+                    "tags": _infer_plaza_tags(feed.mp_name or mp_name, feed.mp_intro or mp_intro or ""),
                     "mp_id": feed.faker_id or biz,
                     "feed_id": feed.id,
                     "cover": feed.mp_cover or local_avatar_path or "",
+                    "platform": "wechat",
+                    "add_count": int(sub_count or 0),
                     "updated_at": now.isoformat(),
                 }
             )
@@ -757,7 +879,7 @@ async def add_mp(
         session.rollback()
         print(f"添加公众号错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="添加公众号失败"
@@ -773,27 +895,45 @@ async def sync_plaza_from_feeds(
     session = DB.get_session()
     from core.models.feed import Feed
 
-    feeds = session.query(Feed).order_by(Feed.created_at.desc()).limit(limit).all()
+    _cleanup_plaza_non_wechat_items()
+    feeds = (
+        session.query(Feed)
+        .filter(Feed.faker_id.isnot(None))
+        .filter(Feed.faker_id != "")
+        .order_by(Feed.created_at.desc())
+        .limit(limit)
+        .all()
+    )
     ok = 0
     now = datetime.now().isoformat()
     for f in feeds:
         try:
+            if not _is_wechat_feed(f):
+                continue
+            sub_count = (
+                session.query(func.count(UserSubscription.id))
+                .filter(UserSubscription.feed_id == f.id)
+                .scalar()
+            ) or 0
             _plaza_upsert_item(
                 {
                     "name": f.mp_name or "",
                     "kw": f.mp_name or "",
                     "desc": f.mp_intro or "",
-                    "tags": ["用户添加"],
+                    "tags": _infer_plaza_tags(f.mp_name or "", f.mp_intro or ""),
                     "mp_id": f.faker_id or "",
                     "feed_id": f.id or "",
                     "cover": f.mp_cover or "",
+                    "platform": "wechat",
+                    "add_count": int(sub_count or 0),
                     "updated_at": now,
                 }
             )
             ok += 1
         except Exception:
             continue
-    return success_response({"synced": ok, "limit": limit})
+    cleanup = _cleanup_plaza_non_wechat_items()
+    return success_response({"synced": ok, "limit": limit, "cleanup": cleanup})
 
 
 @router.delete("/{mp_id}", summary="删除订阅号(管理员=删除公众号；普通用户=取消订阅)")
@@ -811,7 +951,7 @@ async def delete_mp(
             mp = session.query(Feed).filter(Feed.id == mp_id).first()
             if not mp:
                 raise HTTPException(
-                    status_code=status.HTTP_201_CREATED,
+                    status_code=status.HTTP_404_NOT_FOUND,
                     detail=error_response(code=40401, message="订阅号不存在"),
                 )
             session.query(UserSubscription).filter(UserSubscription.feed_id == mp_id).delete(synchronize_session=False)
@@ -828,11 +968,13 @@ async def delete_mp(
         )
         session.commit()
         return success_response({"message": "已取消订阅", "id": mp_id, "deleted": int(deleted or 0)})
+    except HTTPException:
+        raise
     except Exception as e:
         session.rollback()
         print(f"删除订阅号错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="删除订阅号失败"

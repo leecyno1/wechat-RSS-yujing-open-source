@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException,status
 from typing import List
 from datetime import datetime
+import json
+import uuid
 from core.models.tags import Tags as TagsModel
+from core.models.user import User as UserModel
 from core.database import get_db
 from sqlalchemy.orm import Session
 from schemas.tags import Tags, TagsCreate
@@ -27,6 +30,41 @@ def _is_admin(current_user: dict) -> bool:
         return str(current_user.get("role") or "") == "admin" or str(current_user.get("username") or "") == "admin"
     except Exception:
         return False
+
+
+def _normalize_mps_text(raw) -> str:
+    if raw is None:
+        return "[]"
+    if isinstance(raw, (list, dict)):
+        value = raw
+    else:
+        text = str(raw).strip()
+        if not text:
+            return "[]"
+        try:
+            value = json.loads(text)
+        except Exception:
+            return text
+
+    if isinstance(value, list):
+        try:
+            value = sorted(
+                value,
+                key=lambda x: json.dumps(x, ensure_ascii=False, sort_keys=True)
+            )
+        except Exception:
+            pass
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _mp_count(mps_text: str) -> int:
+    try:
+        payload = json.loads(str(mps_text or "[]"))
+        if isinstance(payload, list):
+            return len(payload)
+    except Exception:
+        pass
+    return 0
 
 @router.get("", 
     summary="获取标签列表",
@@ -59,6 +97,102 @@ async def get_tags(offset: int = 0, limit: int = 100, db: Session = Depends(get_
         "total": total
     })
 
+
+@router.get("/plaza",
+    summary="获取频道广场",
+    description="获取所有用户创建的公开频道列表")
+async def get_tag_plaza(
+    offset: int = 0,
+    limit: int = 100,
+    keyword: str = "",
+    db: Session = Depends(get_db),
+    cur_user: dict = Depends(get_current_user)
+):
+    query = (
+        db.query(TagsModel, UserModel.username, UserModel.nickname)
+        .outerjoin(UserModel, TagsModel.user_id == UserModel.id)
+        .filter(TagsModel.status == 1)
+    )
+    kw = str(keyword or "").strip()
+    if kw:
+        rule = or_(TagsModel.name.like(f"%{kw}%"), TagsModel.intro.like(f"%{kw}%"))
+        query = query.filter(rule)
+    total = query.count()
+    rows = (
+        query.order_by(TagsModel.updated_at.desc(), TagsModel.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    current_uid = _uid(cur_user)
+    items = []
+    for tag, username, nickname in rows:
+        creator_display = str(nickname or "").strip() or str(username or "").strip() or "官方频道"
+        items.append({
+            "id": tag.id,
+            "name": tag.name,
+            "cover": tag.cover,
+            "intro": tag.intro,
+            "mps_id": tag.mps_id,
+            "status": tag.status,
+            "created_at": tag.created_at,
+            "updated_at": tag.updated_at,
+            "user_id": tag.user_id,
+            "creator_username": username or "",
+            "creator_nickname": nickname or "",
+            "creator_display": creator_display,
+            "mp_count": _mp_count(tag.mps_id),
+            "is_mine": str(tag.user_id or "") == current_uid,
+        })
+    return success_response(data={
+        "list": items,
+        "page": {
+            "limit": limit,
+            "offset": offset,
+            "total": total
+        },
+        "total": total
+    })
+
+
+@router.post("/plaza/{tag_id}/use",
+    summary="使用频道广场频道",
+    description="复制广场频道到我的频道")
+async def use_tag_from_plaza(tag_id: str, db: Session = Depends(get_db), cur_user: dict = Depends(get_current_user)):
+    user_id = _uid(cur_user)
+    source = db.query(TagsModel).filter(TagsModel.id == tag_id, TagsModel.status == 1).first()
+    if not source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(code=40401, message="频道不存在或已停用"),
+        )
+
+    source_name = str(source.name or "").strip()
+    normalized_source_mps = _normalize_mps_text(source.mps_id)
+    mine = db.query(TagsModel).filter(TagsModel.user_id == user_id).all()
+    for item in mine:
+        if str(item.name or "").strip() != source_name:
+            continue
+        if _normalize_mps_text(item.mps_id) == normalized_source_mps:
+            return success_response(data=item, message="该频道已在我的频道中")
+
+    copied = TagsModel(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        name=source.name or "",
+        cover=source.cover or "",
+        intro=source.intro or "",
+        mps_id=source.mps_id or "[]",
+        status=1,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    db.add(copied)
+    db.commit()
+    db.refresh(copied)
+    return success_response(data=copied, message="已添加到我的频道")
+
 @router.post("",
     summary="创建新标签",
     description="创建一个新的标签"
@@ -82,7 +216,6 @@ async def create_tag(tag: TagsCreate, db: Session = Depends(get_db),cur_user: di
     - 成功: 包含新建标签信息的响应
     - 失败: 错误响应
     """
-    import uuid
     try:
         user_id = _uid(cur_user)
         db_tag = TagsModel(
@@ -104,7 +237,7 @@ async def create_tag(tag: TagsCreate, db: Session = Depends(get_db),cur_user: di
          from core.print  import print_error
          print_error(e)
          raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message=f"暂无数据",
@@ -131,7 +264,10 @@ async def get_tag(tag_id: str, db: Session = Depends(get_db),cur_user: dict = De
         q = q.filter(TagsModel.user_id == user_id)
     tag = q.first()
     if not tag:
-        return error_response(code=status.HTTP_201_CREATED, message="Tag not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response(code=40401, message="Tag not found"),
+        )
     return success_response(data=tag)
 
 @router.put("/{tag_id}",
@@ -167,7 +303,10 @@ async def update_tag(tag_id: str, tag_data: TagsCreate, db: Session = Depends(ge
             q = q.filter(TagsModel.user_id == user_id)
         tag = q.first()
         if not tag:
-            return error_response(code=404, message="Tag not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_response(code=40401, message="Tag not found"),
+            )
         
         tag.name = tag_data.name
         tag.cover = tag_data.cover
@@ -181,8 +320,13 @@ async def update_tag(tag_id: str, tag_data: TagsCreate, db: Session = Depends(ge
         db.commit()
         db.refresh(tag)
         return success_response(data=tag)
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50001, message=str(e)),
+        )
 
 @router.delete("/{tag_id}",
     summary="删除标签",
@@ -208,9 +352,17 @@ async def delete_tag(tag_id: str, db: Session = Depends(get_db),cur_user: dict =
             q = q.filter(TagsModel.user_id == user_id)
         tag = q.first()
         if not tag:
-            return error_response(code=status.HTTP_201_CREATED, message="Tag not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_response(code=40401, message="Tag not found"),
+            )
         db.delete(tag)
         db.commit()
         return success_response(message="Tag deleted successfully")
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=status.HTTP_201_CREATED, message=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50001, message=str(e)),
+        )

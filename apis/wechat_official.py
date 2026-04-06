@@ -130,7 +130,10 @@ async def wechat_official_menu_sync(
         return success_response(data={"menu": menu, "resp": resp})
     except Exception as e:
         ip = _parse_wechat_invalid_ip(e)
-        return error_response(code=50061, message=f"公众号菜单更新失败：{e}", data=ip)
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(code=50061, message=f"公众号菜单更新失败：{e}", data=ip),
+        )
 
 
 @router.get("/diagnose/whitelist_ip", summary="诊断公众号IP白名单（返回微信识别的出口IP）")
@@ -239,7 +242,7 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
         )
         if not rec:
             logger.info("WeChatOfficial: bind failed (code not found) openid=%s code=%s", openid_s, masked_code)
-            return "【Dr.Lemon订阅助手】绑定码不存在或已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
+            return "【大圣之怒订阅助手】绑定码不存在或已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         status_v = int(getattr(rec, "status", 0) or 0)
         exp = getattr(rec, "expires_at", None)
@@ -247,7 +250,7 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
             used_openid = str(getattr(rec, "used_openid", "") or "")
             if used_openid and used_openid != openid_s:
                 logger.info("WeChatOfficial: bind failed (code used) openid=%s code=%s", openid_s, masked_code)
-                return "【Dr.Lemon订阅助手】该绑定码已被使用。\n请回到网站重新生成绑定码后再发送。"
+                return "【大圣之怒订阅助手】该绑定码已被使用。\n请回到网站重新生成绑定码后再发送。"
             binding = (
                 session.query(UserWechatBinding)
                 .filter(UserWechatBinding.user_id == rec.user_id)
@@ -255,9 +258,9 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
                 .first()
             )
             if binding:
-                return "【Dr.Lemon订阅助手】你已绑定成功。\n点击菜单【订阅推送】可获取今日精选+摘要。"
+                return "【大圣之怒订阅助手】你已绑定成功。\n点击菜单【订阅推送】可获取今日精选+摘要。"
             else:
-                return "【Dr.Lemon订阅助手】绑定码已使用，但绑定记录异常。\n请回到网站重新生成绑定码后再发送。"
+                return "【大圣之怒订阅助手】绑定码已使用，但绑定记录异常。\n请回到网站重新生成绑定码后再发送。"
 
         if exp and exp <= now:
             try:
@@ -268,17 +271,17 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
             except Exception:
                 session.rollback()
             logger.info("WeChatOfficial: bind failed (code expired) openid=%s code=%s", openid_s, masked_code)
-            return "【Dr.Lemon订阅助手】绑定码已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
+            return "【大圣之怒订阅助手】绑定码已过期。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         if status_v == 9:
             logger.info("WeChatOfficial: bind failed (code invalid) openid=%s code=%s", openid_s, masked_code)
-            return "【Dr.Lemon订阅助手】绑定码已失效。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
+            return "【大圣之怒订阅助手】绑定码已失效。\n请回到网站【信息-绑定】重新生成绑定码后再发送。"
 
         user_id = str(getattr(rec, "user_id", "") or "")
         user = session.query(DBUser).filter(DBUser.id == user_id).first()
         if not user:
             logger.info("WeChatOfficial: bind failed (user missing) openid=%s user_id=%s code=%s", openid_s, user_id, masked_code)
-            return "【Dr.Lemon订阅助手】绑定失败：绑定码对应用户不存在。\n请回到网站重新生成绑定码后再发送。"
+            return "【大圣之怒订阅助手】绑定失败：绑定码对应用户不存在。\n请回到网站重新生成绑定码后再发送。"
 
         # Prevent one openid binding to multiple users.
         by_openid = (
@@ -289,7 +292,7 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
         )
         if by_openid and str(by_openid.user_id) != user_id:
             logger.info("WeChatOfficial: bind failed (openid conflict) openid=%s user_id=%s", openid_s, user_id)
-            return "【Dr.Lemon订阅助手】该微信已绑定到其它站内账号。\n如需更换账号，请先在站内解绑或联系管理员。"
+            return "【大圣之怒订阅助手】该微信已绑定到其它站内账号。\n如需更换账号，请先在站内解绑或联系管理员。"
 
         binding = session.query(UserWechatBinding).filter(UserWechatBinding.user_id == user_id).first()
         if binding:
@@ -332,7 +335,7 @@ def _consume_bind_code_reply(openid: str, content: str) -> str | None:
 
         session.commit()
         logger.info("WeChatOfficial: bind success user_id=%s openid=%s", user_id, openid_s)
-        return f"【Dr.Lemon订阅助手】绑定成功！\n你已绑定站内账号：{user.username}\n点击菜单【订阅推送】可获取今日精选+摘要。"
+        return f"【大圣之怒订阅助手】绑定成功！\n你已绑定站内账号：{user.username}\n点击菜单【订阅推送】可获取今日精选+摘要。"
     finally:
         try:
             session.close()
@@ -361,23 +364,23 @@ def _build_click_digest_reply_text(openid: str) -> str:
         )
         if not binding:
             return (
-                "【Dr.Lemon订阅助手】\n你还未绑定站内账号。\n\n"
+                "【大圣之怒订阅助手】\n你还未绑定站内账号。\n\n"
                 "请先登录网站，在【信息-绑定】生成绑定码，然后把绑定码发给本公众号完成绑定。"
             )
 
         user_id = str(getattr(binding, "user_id", "") or "")
         if not user_id:
-            return "【Dr.Lemon订阅助手】绑定信息异常，请重新绑定。"
+            return "【大圣之怒订阅助手】绑定信息异常，请重新绑定。"
 
         svc = DigestService()
         digest = svc.build_user_digest(user_id, slot="daily")
         total = int(((digest.get("stats") or {}).get("total")) or 0)
         if total <= 0:
-            return "【Dr.Lemon订阅助手】今天暂无更新文章。"
+            return "【大圣之怒订阅助手】今天暂无更新文章。"
 
         text = str(((digest.get("message") or {}).get("text")) or "").strip()
         if not text:
-            return "【Dr.Lemon订阅助手】生成推送内容失败，请稍后再试。"
+            return "【大圣之怒订阅助手】生成推送内容失败，请稍后再试。"
 
         return text
     finally:
@@ -442,7 +445,7 @@ def _build_click_history_reply_text(openid: str) -> str:
         for art, feed in latest_rows:
             latest_items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
 
-        lines: list[str] = ["【Dr.Lemon订阅助手】往期文章"]
+        lines: list[str] = ["【大圣之怒订阅助手】往期文章"]
 
         if top_items:
             lines.append("")
@@ -467,7 +470,7 @@ def _build_click_history_reply_text(openid: str) -> str:
                     lines.append(u)
 
         if not (top_items or latest_items):
-            return "【Dr.Lemon订阅助手】暂无可推荐文章。"
+            return "【大圣之怒订阅助手】暂无可推荐文章。"
 
         if not user_id:
             lines.append("")
@@ -570,8 +573,8 @@ def _build_text_query_reply_text(openid: str, content: str) -> str:
 
     if _is_help_query(qraw):
         return (
-            "【Dr.Lemon订阅助手】关注与绑定方式：\n"
-            "1）登录网站 → 点击右上角【关注柠檬博士】\n"
+            "【大圣之怒订阅助手】关注与绑定方式：\n"
+            "1）登录网站 → 点击右上角【关注大圣之怒】\n"
             "2）扫描弹窗里的【绑定二维码】关注（或已关注直接扫码）→ 自动绑定\n"
             "3）回到网站点【刷新绑定状态】确认\n\n"
             "备用方式：把网站显示的“绑定码”直接发给本公众号，也可完成绑定。\n"
@@ -619,7 +622,7 @@ def _build_text_query_reply_text(openid: str, content: str) -> str:
             rows = base_q.order_by(func.coalesce(Article.publish_time, 0).desc()).limit(limit).all()
             for art, feed in rows:
                 items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
-            title = "【Dr.Lemon订阅助手】最新文章推荐"
+            title = "【大圣之怒订阅助手】最新文章推荐"
         else:
             kw = qraw
             if _is_hot_query(qraw):
@@ -649,7 +652,7 @@ def _build_text_query_reply_text(openid: str, content: str) -> str:
                 items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
 
             if items:
-                title = f"【Dr.Lemon订阅助手】为你推荐（{qraw}）"
+                title = f"【大圣之怒订阅助手】为你推荐（{qraw}）"
             else:
                 q2 = base_q.filter(func.coalesce(Article.publish_time, 0) >= hot_since).order_by(
                     func.coalesce(Article.like_count, 0).desc(),
@@ -660,11 +663,11 @@ def _build_text_query_reply_text(openid: str, content: str) -> str:
                     rows2 = base_q.order_by(func.coalesce(Article.publish_time, 0).desc()).limit(limit).all()
                 for art, feed in rows2:
                     items.append({"title": art.title or "", "url": art.url or "", "mp": (feed.mp_name or "") if feed else ""})
-                title = "【Dr.Lemon订阅助手】没有找到匹配内容，给你一份近期推荐"
+                title = "【大圣之怒订阅助手】没有找到匹配内容，给你一份近期推荐"
 
         extra = ""
         if not user_id:
-            extra = "想要按你的订阅做个性化推荐：请先到网站点击【关注柠檬博士】扫码自动绑定。"
+            extra = "想要按你的订阅做个性化推荐：请先到网站点击【关注大圣之怒】扫码自动绑定。"
         elif not feed_ids:
             extra = "你还没有订阅任何公众号：先去网站添加订阅后，再发关键词我会更准。"
 
@@ -705,9 +708,9 @@ def _build_reply_text_from_msg(msg: dict[str, str]) -> str:
                     return reply
             if event == "SUBSCRIBE" and openid:
                 if _set_binding_active(openid, is_active=True):
-                    return "【Dr.Lemon订阅助手】欢迎回来！\n已恢复你的绑定状态。\n点击菜单【订阅推送】可获取今日精选+摘要。"
+                    return "【大圣之怒订阅助手】欢迎回来！\n已恢复你的绑定状态。\n点击菜单【订阅推送】可获取今日精选+摘要。"
             # No scene, no binding: show brief instructions.
-            return "【Dr.Lemon订阅助手】欢迎关注！\n请先登录网站，在【信息-绑定】生成绑定码，并把绑定码发给本公众号完成绑定。"
+            return "【大圣之怒订阅助手】欢迎关注！\n请先登录网站，在【信息-绑定】生成绑定码，并把绑定码发给本公众号完成绑定。"
         if event == "UNSUBSCRIBE":
             if openid:
                 _set_binding_active(openid, is_active=False)

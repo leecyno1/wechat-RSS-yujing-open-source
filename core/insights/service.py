@@ -1,16 +1,44 @@
 import json
+import re
 from datetime import datetime
 from typing import Any
 import time
 import hashlib
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from core.config import cfg
 from core.db import DB
 from core.models.article import Article
 from core.models.article_insight import ArticleInsight
 from core.print import print_error, print_info
+from core.queue import InFlightGate
 
 from .extract import compute_content_hash, extract_headings, extract_summary, html_to_text
+
+
+_INSIGHT_WARMUP_GATE = InFlightGate()
+
+
+def _content_usable(raw: Any, *, min_chars: int) -> bool:
+    s = str(raw or "").strip()
+    if not s or s == "DELETED":
+        return False
+    text = re.sub(r"<[^>]+>", " ", s)
+    text = re.sub(r"\s+", " ", text).strip()
+    return len(text) >= max(20, int(min_chars or 120))
+
+
+def _run_blocking_with_timeout(fn, *, timeout_seconds: float) -> Any:
+    timeout_seconds = max(3.0, min(180.0, float(timeout_seconds or 30.0)))
+    pool = ThreadPoolExecutor(max_workers=1)
+    fut = pool.submit(fn)
+    try:
+        return fut.result(timeout=timeout_seconds)
+    finally:
+        try:
+            pool.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
 
 
 def _pick_shard_model(article_id: str, models: list[str]) -> str:
@@ -43,6 +71,16 @@ def _parse_shard_profiles(raw: Any) -> list[dict[str, str]]:
     if not isinstance(data, list):
         return []
     out: list[dict[str, str]] = []
+
+    def _priority(v: Any) -> int:
+        try:
+            n = int(v)
+            if n < 1:
+                return 9999
+            return n
+        except Exception:
+            return 9999
+
     for item in data:
         if not isinstance(item, dict):
             continue
@@ -60,6 +98,7 @@ def _parse_shard_profiles(raw: Any) -> list[dict[str, str]]:
                 "api_url": api_url,
                 "api_key": api_key,
                 "model": model,
+                "priority": str(_priority(item.get("priority", 9999))),
             }
         )
     # Deterministic order to keep stable sharding across restarts.
@@ -76,6 +115,50 @@ def _pick_shard_profile(article_id: str, profiles: list[dict[str, str]]) -> dict
     return profiles[idx]
 
 
+def _parse_fallback_profiles(raw: Any) -> list[dict[str, str]]:
+    profiles = _parse_shard_profiles(raw)
+    if not profiles:
+        return []
+    # Fallback uses strict priority order (1 -> 2 -> 3 ...).
+    profiles.sort(key=lambda x: (int(str(x.get("priority") or "9999")), str(x.get("name") or "")))
+    return profiles
+
+
+def _safe_priority(v: Any, default: int = 9999) -> int:
+    try:
+        n = int(v)
+        return n if n > 0 else default
+    except Exception:
+        return default
+
+
+def _norm_router_mode(v: Any) -> str:
+    s = str(v or "").strip().lower()
+    if s in ("shard", "hash", "hash_shard"):
+        return "shard"
+    return "fallback"
+
+
+def _profiles_to_tuples(profiles: list[dict[str, str]]) -> list[tuple[str, str, str, str]]:
+    out: list[tuple[str, str, str, str]] = []
+    for prof in profiles or []:
+        out.append(
+            (
+                str(prof.get("provider") or "").strip(),
+                str(prof.get("api_url") or "").strip(),
+                str(prof.get("api_key") or "").strip(),
+                str(prof.get("model") or "").strip(),
+            )
+        )
+    return out
+
+
+def _sort_profiles_priority(profiles: list[dict[str, str]]) -> list[dict[str, str]]:
+    out = list(profiles or [])
+    out.sort(key=lambda x: (_safe_priority(x.get("priority"), 9999), str(x.get("name") or "")))
+    return out
+
+
 class InsightsService:
     def __init__(self):
         self.provider = cfg.get("llm.provider", "siliconflow")
@@ -88,6 +171,49 @@ class InsightsService:
         profiles_raw = cfg.get("llm.shard.profiles_json", "") or cfg.get("llm.shard.profiles", "")
         self._shard_profiles = _parse_shard_profiles(profiles_raw)
         self._shard_enable = shard_enable and bool(self._shard_profiles)
+
+        # Optional priority fallback chain (strategy B): try provider #1 -> #2 -> #3.
+        # Used for high-availability and cross-provider failover.
+        fallback_enable = bool(cfg.get("llm.fallback.enable", False))
+        fallback_raw = cfg.get("llm.fallback.profiles_json", "") or cfg.get("llm.fallback.profiles", "")
+        self._fallback_profiles = _parse_fallback_profiles(fallback_raw)
+        self._fallback_enable = fallback_enable and bool(self._fallback_profiles)
+
+        # 0913-style task router: split big/small model routes by task.
+        # - summary  => big model route
+        # - key_points => small model route
+        # - breakdown => optional custom route (defaults to summary route when omitted)
+        self._router_enable = bool(cfg.get("llm.router.enable", False))
+        self._router_modes = {
+            "summary": _norm_router_mode(cfg.get("llm.router.summary.mode", "fallback")),
+            "key_points": _norm_router_mode(cfg.get("llm.router.key_points.mode", "fallback")),
+            "breakdown": _norm_router_mode(cfg.get("llm.router.breakdown.mode", "fallback")),
+        }
+        self._router_shard_include_fallback = bool(cfg.get("llm.router.shard.include_fallback", True))
+
+        # Aliases:
+        # - llm.router.big_profiles_json -> summary route
+        # - llm.router.small_profiles_json -> key_points route
+        summary_raw = (
+            cfg.get("llm.router.summary.profiles_json", "")
+            or cfg.get("llm.router.big_profiles_json", "")
+            or cfg.get("llm.router.summary.profiles", "")
+        )
+        key_points_raw = (
+            cfg.get("llm.router.key_points.profiles_json", "")
+            or cfg.get("llm.router.small_profiles_json", "")
+            or cfg.get("llm.router.key_points.profiles", "")
+        )
+        breakdown_raw = (
+            cfg.get("llm.router.breakdown.profiles_json", "")
+            or cfg.get("llm.router.breakdown.profiles", "")
+            or summary_raw
+        )
+        self._router_profiles = {
+            "summary": _parse_shard_profiles(summary_raw),
+            "key_points": _parse_shard_profiles(key_points_raw),
+            "breakdown": _parse_shard_profiles(breakdown_raw),
+        }
 
         # Back-compat: older config supports sharding across models under a single provider.
         shard_models_raw = str(cfg.get("llm.shard.models", "") or "")
@@ -109,6 +235,14 @@ class InsightsService:
 
     def _llm_profile_params(self, article_id: str) -> tuple[str, str, str, str]:
         """Return (provider, api_url, api_key, model) for this article."""
+        if self._fallback_enable:
+            prof = self._fallback_profiles[0] if self._fallback_profiles else {}
+            return (
+                str(prof.get("provider") or "").strip(),
+                str(prof.get("api_url") or "").strip(),
+                str(prof.get("api_key") or "").strip(),
+                str(prof.get("model") or "").strip(),
+            )
         if self._shard_enable:
             prof = self._profile_for_article(article_id)
             return (
@@ -125,9 +259,67 @@ class InsightsService:
             str(cfg.get("llm.siliconflow.model", "") or "").strip(),
         )
 
+    def _llm_profiles_try_order(self, article_id: str) -> list[tuple[str, str, str, str]]:
+        """Return ordered LLM profiles for retry/fallback.
+
+        Tuple schema: (provider, api_url, api_key, model).
+        """
+        if self._fallback_enable:
+            ordered: list[tuple[str, str, str, str]] = []
+            for prof in self._fallback_profiles:
+                ordered.append(
+                    (
+                        str(prof.get("provider") or "").strip(),
+                        str(prof.get("api_url") or "").strip(),
+                        str(prof.get("api_key") or "").strip(),
+                        str(prof.get("model") or "").strip(),
+                    )
+                )
+            return ordered
+        return [self._llm_profile_params(article_id)]
+
+    def _llm_profiles_try_order_for_task(self, article_id: str, task: str) -> list[tuple[str, str, str, str]]:
+        task_key = str(task or "").strip().lower() or "summary"
+        if not self._router_enable:
+            return self._llm_profiles_try_order(article_id)
+
+        profiles = list(self._router_profiles.get(task_key) or [])
+        if not profiles:
+            return self._llm_profiles_try_order(article_id)
+
+        mode = self._router_modes.get(task_key, "fallback")
+        if mode == "shard":
+            picked = _pick_shard_profile(article_id, profiles)
+            if not picked:
+                return self._llm_profiles_try_order(article_id)
+            ordered_profiles: list[dict[str, str]] = [picked]
+            if self._router_shard_include_fallback:
+                picked_name = str(picked.get("name") or "")
+                for prof in _sort_profiles_priority(profiles):
+                    name = str(prof.get("name") or "")
+                    if name and name == picked_name:
+                        continue
+                    ordered_profiles.append(prof)
+            return _profiles_to_tuples(ordered_profiles)
+
+        # default: fallback
+        return _profiles_to_tuples(_sort_profiles_priority(profiles))
+
+    def _llm_profile_params_for_task(self, article_id: str, task: str) -> tuple[str, str, str, str]:
+        ordered = self._llm_profiles_try_order_for_task(article_id, task)
+        if ordered:
+            return ordered[0]
+        return self._llm_profile_params(article_id)
+
     def ensure_cached(self, article_id: str) -> None:
         """Best-effort precompute & cache insights for better UX."""
         import asyncio
+
+        article_id = str(article_id or "").strip()
+        if not article_id:
+            return
+        if not _INSIGHT_WARMUP_GATE.try_acquire(article_id):
+            return
 
         def _run_coro(coro):
             try:
@@ -147,101 +339,84 @@ class InsightsService:
                 except Exception:
                     pass
 
-        session = DB.get_session()
-        article = session.query(Article).filter(Article.id == article_id).first()
-        if not article:
-            return
-
-        fetched_content = False
         try:
-            if bool(cfg.get("insights.auto_fetch_content", False)) and (not (article.content or "").strip()):
-                url = (article.url or "").strip()
-                if url and "mp.weixin.qq.com" in url:
-                    try:
-                        from driver.wxarticle import WXArticleFetcher
+            session = DB.get_session()
+            article = session.query(Article).filter(Article.id == article_id).first()
+            if not article:
+                return
 
-                        info = WXArticleFetcher().get_article_content(url)
-                        content = (info.get("content") or "").strip()
-                        changed = False
-                        if content:
-                            article.content = content
-                            changed = True
-                        topic_image = (info.get("topic_image") or "").strip()
-                        if topic_image and not (article.pic_url or "").strip():
-                            article.pic_url = topic_image
-                            changed = True
-                        # Best-effort: persist read_count when available (may be NULL)
-                        if info.get("read_count", None) is not None:
+            fetched_content = False
+            try:
+                if bool(cfg.get("insights.auto_fetch_content", False)) and (not (article.content or "").strip()):
+                    try:
+                        from apis.article import _fetch_article_content_sync
+
+                        timeout_s = float(cfg.get("insights.auto_fetch_content_timeout_seconds", 40) or 40)
+                        ret = _run_blocking_with_timeout(
+                            lambda: _fetch_article_content_sync(article_id, force=False),
+                            timeout_seconds=timeout_s,
+                        )
+                        if isinstance(ret, dict):
+                            fetched_content = bool(ret.get("fetched")) and int(ret.get("content_len") or 0) > 0
+                        # Refresh local row to avoid stale view.
+                        if fetched_content:
                             try:
-                                article.read_count = int(info.get("read_count"))
-                                changed = True
+                                session.expire(article)
+                                article = session.query(Article).filter(Article.id == article_id).first() or article
                             except Exception:
                                 pass
-                        if info.get("like_count", None) is not None:
-                            try:
-                                article.like_count = int(info.get("like_count"))
-                                changed = True
-                            except Exception:
-                                pass
-                        if info.get("share_count", None) is not None:
-                            try:
-                                article.share_count = int(info.get("share_count"))
-                                changed = True
-                            except Exception:
-                                pass
-                        if info.get("recommend_count", None) is not None:
-                            try:
-                                article.recommend_count = int(info.get("recommend_count"))
-                                changed = True
-                            except Exception:
-                                pass
-                        if changed:
-                            article.updated_at = datetime.now()
-                            session.add(article)
-                            session.commit()
-                            fetched_content = bool(content)
+                    except FuturesTimeoutError:
+                        session.rollback()
                     except Exception:
                         session.rollback()
-        except Exception:
-            session.rollback()
-
-        # Always ensure basic exists (summary/headings/content_hash)
-        try:
-            ins = self.get_or_create_basic(article_id)
-            if ins and (ins.summary or "").strip() and not (article.description or "").strip():
-                article.description = (ins.summary or "").strip()
-                article.updated_at = datetime.now()
-                session.add(article)
-                session.commit()
-        except Exception:
-            pass
-
-        # Important: when we just fetched content via Playwright (sync),
-        # some environments may have an active asyncio loop that makes `_run_coro`
-        # fall back to `create_task()` and never persist results (key points/breakdown).
-        # Re-schedule a second pass so LLM steps run after the fetch stage.
-        if fetched_content:
-            try:
-                from core.queue import InsightsQueue
-
-                InsightsQueue.add_task(self.ensure_cached, article_id)
             except Exception:
-                pass
-            return
+                session.rollback()
 
-        # Key points: can be generated from digest/summary even without content.
-        if bool(cfg.get("insights.auto_key_points", True)):
             try:
-                _run_coro(self.generate_key_points(article_id))
+                ins = self.get_or_create_basic(article_id)
+                if ins and (ins.summary or "").strip() and not (article.description or "").strip():
+                    article.description = (ins.summary or "").strip()
+                    article.updated_at = datetime.now()
+                    session.add(article)
+                    session.commit()
             except Exception:
                 pass
 
-        # Breakdown: requires content + LLM configured
-        if bool(cfg.get("insights.auto_llm_breakdown", False)):
+            if fetched_content:
+                try:
+                    from core.queue import InsightsQueue
+
+                    InsightsQueue.add_task(self.ensure_cached, article_id)
+                except Exception:
+                    pass
+                return
+
+            auto_summary = bool(cfg.get("insights.auto_ai_summary", True))
+            auto_key_points = bool(cfg.get("insights.auto_key_points", True))
+            auto_breakdown = bool(cfg.get("insights.auto_llm_breakdown", False))
+            if not (auto_summary or auto_key_points or auto_breakdown):
+                return
+
+            async def _run_all() -> None:
+                import asyncio
+
+                tasks: list[Any] = []
+                if auto_summary:
+                    tasks.append(self.generate_ai_summary(article_id, force=False))
+                if auto_key_points:
+                    tasks.append(self.generate_key_points(article_id))
+                if auto_breakdown:
+                    tasks.append(self.generate_llm_breakdown(article_id))
+                if not tasks:
+                    return
+                await asyncio.gather(*tasks, return_exceptions=True)
+
             try:
-                _run_coro(self.generate_llm_breakdown(article_id))
+                _run_coro(_run_all())
             except Exception:
                 pass
+        finally:
+            _INSIGHT_WARMUP_GATE.release(article_id)
 
     def ensure_mp_recent_cached(self, mp_id: str, *, days: int = 3, limit: int = 120) -> None:
         """Schedule caching for recent articles of a feed (non-blocking)."""
@@ -265,8 +440,8 @@ class InsightsService:
             deleted_status = int(DATA_STATUS.DELETED)
         except Exception:
             deleted_status = 1000
-        ids = (
-            session.query(Article.id)
+        rows = (
+            session.query(Article.id, Article.content)
             .filter(Article.mp_id == mp_id)
             .filter(Article.status != deleted_status)
             .filter(Article.publish_time.isnot(None))
@@ -279,9 +454,21 @@ class InsightsService:
             from core.queue import InsightsQueue
         except Exception:
             InsightsQueue = None
+        try:
+            from apis.article import _schedule_article_content_fetch
+        except Exception:
+            _schedule_article_content_fetch = None
 
-        for (aid,) in ids:
+        prefetch_content = bool(cfg.get("insights.prewarm_prefetch_content", True))
+        content_min_chars = max(20, min(5000, int(cfg.get("article.content_min_chars", 120) or 120)))
+
+        for (aid, content) in rows:
             try:
+                if prefetch_content and _schedule_article_content_fetch and not _content_usable(content, min_chars=content_min_chars):
+                    try:
+                        _schedule_article_content_fetch(str(aid), force=False)
+                    except Exception:
+                        pass
                 if InsightsQueue:
                     InsightsQueue.add_task(self.ensure_cached, str(aid))
                 else:
@@ -433,7 +620,7 @@ class InsightsService:
             insight.content_hash = content_hash
             insight.status = 1
             insight.error = ""
-            provider, _, _, model = self._llm_profile_params(article_id)
+            provider, _, _, model = self._llm_profile_params_for_task(article_id, "summary")
             insight.llm_provider = provider or self.provider
             insight.llm_model = model or self.model
 
@@ -468,8 +655,8 @@ class InsightsService:
             return insight
 
         # If LLM not configured, still persist a deterministic fallback so UI has data.
-        provider, api_url, api_key, model = self._llm_profile_params(article_id)
-        if not (api_key and api_url and model):
+        profiles = [x for x in self._llm_profiles_try_order_for_task(article_id, "key_points") if x[1] and x[2] and x[3]]
+        if not profiles:
             data = self._fallback_key_points(insight)
             insight.key_points_json = json.dumps(data, ensure_ascii=False)
             insight.updated_at = datetime.now()
@@ -512,38 +699,142 @@ class InsightsService:
             "content": clipped,
         }
 
-        try:
-            data = await openai_compat_chat_json(
-                model=model,
-                api_url=api_url,
-                api_key=api_key,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-                ],
-                timeout=float(cfg.get("llm.timeout", 60)),
-            )
-            if not isinstance(data, dict):
-                raise ValueError("Invalid LLM response: not a JSON object")
-            highlight = (data.get("highlight") or "").strip()
-            points = data.get("points") if isinstance(data.get("points"), list) else []
-            points = [str(x).strip() for x in points if str(x).strip()]
-            if not highlight or not points:
-                fallback = self._fallback_key_points(insight)
-                highlight = highlight or fallback.get("highlight", "")
-                points = points or fallback.get("points", [])
-            insight.key_points_json = json.dumps({"highlight": highlight, "points": points}, ensure_ascii=False)
-            insight.error = ""
-        except Exception as e:
-            print_error(f"LLM key points failed: {e}")
-            # Persist fallback to keep UX stable.
+        used_provider = ""
+        used_model = ""
+        errs: list[str] = []
+        ok = False
+        for provider, api_url, api_key, model in profiles:
+            try:
+                data = await openai_compat_chat_json(
+                    model=model,
+                    api_url=api_url,
+                    api_key=api_key,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+                    ],
+                    timeout=float(cfg.get("llm.timeout", 60)),
+                )
+                if not isinstance(data, dict):
+                    raise ValueError("Invalid LLM response: not a JSON object")
+                highlight = (data.get("highlight") or "").strip()
+                points = data.get("points") if isinstance(data.get("points"), list) else []
+                points = [str(x).strip() for x in points if str(x).strip()]
+                if not highlight or not points:
+                    fallback = self._fallback_key_points(insight)
+                    highlight = highlight or fallback.get("highlight", "")
+                    points = points or fallback.get("points", [])
+                insight.key_points_json = json.dumps({"highlight": highlight, "points": points}, ensure_ascii=False)
+                used_provider = provider
+                used_model = model
+                insight.error = ""
+                ok = True
+                break
+            except Exception as e:
+                errs.append(f"{provider or 'unknown'}:{model or 'unknown'} -> {str(e)}")
+                continue
+
+        if not ok:
+            print_error(f"LLM key points failed: {' | '.join(errs)}")
             data = self._fallback_key_points(insight)
             insight.key_points_json = json.dumps(data, ensure_ascii=False)
-            insight.error = str(e)
+            insight.error = " | ".join(errs)[:3000]
 
         insight.updated_at = datetime.now()
-        insight.llm_provider = provider or self.provider
-        insight.llm_model = model
+        insight.llm_provider = used_provider or self.provider
+        insight.llm_model = used_model or self.model
+        session.add(insight)
+        session.commit()
+        session.refresh(insight)
+        return insight
+
+    async def generate_ai_summary(self, article_id: str, *, force: bool = False) -> ArticleInsight | None:
+        session = DB.get_session()
+        article = session.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            return None
+
+        insight = self.get_or_create_basic(article_id)
+        if insight is None:
+            return None
+
+        if not force and (insight.summary or "").strip():
+            # Heuristic: if current summary differs from deterministic local-extract result,
+            # treat it as an already-generated summary and skip rerun.
+            # This avoids repeated LLM calls while still upgrading local fallback summaries.
+            existing = str(insight.summary or "").strip()
+            max_len = int(cfg.get("insights.summary_max_len", 200))
+            local_summary = extract_summary(article.description, article.content, max_len=max_len)
+            title_summary = (article.title or "").strip()[:max_len]
+            if existing and existing not in {str(local_summary or "").strip(), str(title_summary or "").strip()}:
+                return insight
+
+        content_text = html_to_text(article.content) or (article.description or "")
+        if not (content_text or "").strip():
+            insight.summary = (article.title or "").strip()[:200]
+            insight.updated_at = datetime.now()
+            session.add(insight)
+            session.commit()
+            session.refresh(insight)
+            return insight
+
+        profiles = [x for x in self._llm_profiles_try_order_for_task(article_id, "summary") if x[1] and x[2] and x[3]]
+        if not profiles:
+            max_len = int(cfg.get("insights.summary_max_len", 200))
+            insight.summary = extract_summary(article.description, article.content, max_len=max_len)
+            insight.updated_at = datetime.now()
+            session.add(insight)
+            session.commit()
+            session.refresh(insight)
+            return insight
+
+        from core.llm.openai_compat import openai_compat_chat_text
+
+        max_chars = int(cfg.get("llm.max_chars", 24000))
+        clipped = content_text[:max_chars]
+        system = "你是新闻编辑。输出一段中文摘要（120-220字），突出核心事实、结论与影响。不要使用标题、不要分点。"
+        user = f"标题：{article.title or ''}\n内容：\n{clipped}"
+
+        used_provider = ""
+        used_model = ""
+        errs: list[str] = []
+        for provider, api_url, api_key, model in profiles:
+            try:
+                text = await openai_compat_chat_text(
+                    model=model,
+                    api_url=api_url,
+                    api_key=api_key,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    timeout=float(cfg.get("llm.timeout", 60)),
+                )
+                summary = str(text or "").strip()
+                if not summary:
+                    raise ValueError("Empty summary")
+                insight.summary = summary[:500]
+                used_provider = provider
+                used_model = model
+                insight.error = ""
+                break
+            except Exception as e:
+                errs.append(f"{provider or 'unknown'}:{model or 'unknown'} -> {str(e)}")
+                continue
+
+        if not (insight.summary or "").strip():
+            max_len = int(cfg.get("insights.summary_max_len", 200))
+            insight.summary = extract_summary(article.description, article.content, max_len=max_len)
+            insight.error = " | ".join(errs)[:3000]
+
+        if (insight.summary or "").strip() and not (article.description or "").strip():
+            article.description = (insight.summary or "").strip()
+            article.updated_at = datetime.now()
+            session.add(article)
+
+        insight.updated_at = datetime.now()
+        insight.llm_provider = used_provider or self.provider
+        insight.llm_model = used_model or self.model
         session.add(insight)
         session.commit()
         session.refresh(insight)
@@ -567,13 +858,13 @@ class InsightsService:
         ):
             return insight
 
-        provider, api_url, api_key, model = self._llm_profile_params(article_id)
-        if not (api_key and api_url and model):
+        profiles = [x for x in self._llm_profiles_try_order_for_task(article_id, "breakdown") if x[1] and x[2] and x[3]]
+        if not profiles:
             insight.status = 9
             insight.error = "LLM not configured; set llm.shard.profiles_json (recommended) or llm.siliconflow.api_key/api_url/model."
             insight.updated_at = datetime.now()
-            insight.llm_provider = provider or self.provider
-            insight.llm_model = model
+            insight.llm_provider = self.provider
+            insight.llm_model = self.model
             session.add(insight)
             session.commit()
             return insight
@@ -605,28 +896,39 @@ class InsightsService:
             "content": clipped,
         }
 
-        try:
-            data = await openai_compat_chat_json(
-                model=model,
-                api_url=api_url,
-                api_key=api_key,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-                ],
-                timeout=float(cfg.get("llm.timeout", 60)),
-            )
-            insight.llm_breakdown_json = json.dumps(data, ensure_ascii=False)
-            insight.status = 2
-            insight.error = ""
-        except Exception as e:
-            print_error(f"LLM breakdown failed: {e}")
+        used_provider = ""
+        used_model = ""
+        errs: list[str] = []
+        for provider, api_url, api_key, model in profiles:
+            try:
+                data = await openai_compat_chat_json(
+                    model=model,
+                    api_url=api_url,
+                    api_key=api_key,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+                    ],
+                    timeout=float(cfg.get("llm.timeout", 60)),
+                )
+                insight.llm_breakdown_json = json.dumps(data, ensure_ascii=False)
+                insight.status = 2
+                insight.error = ""
+                used_provider = provider
+                used_model = model
+                break
+            except Exception as e:
+                errs.append(f"{provider or 'unknown'}:{model or 'unknown'} -> {str(e)}")
+                continue
+
+        if insight.status != 2:
+            print_error(f"LLM breakdown failed: {' | '.join(errs)}")
             insight.status = 9
-            insight.error = str(e)
+            insight.error = " | ".join(errs)[:3000]
 
         insight.updated_at = datetime.now()
-        insight.llm_provider = provider or self.provider
-        insight.llm_model = model
+        insight.llm_provider = used_provider or self.provider
+        insight.llm_model = used_model or self.model
         session.add(insight)
         session.commit()
         session.refresh(insight)

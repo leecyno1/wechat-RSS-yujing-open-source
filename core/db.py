@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Engine,Text,event
+from sqlalchemy import create_engine, Engine,event, inspect, text as sql_text
 from sqlalchemy.orm import sessionmaker, declarative_base,scoped_session
 from sqlalchemy import Column, Integer, String, DateTime
 from typing import Optional, List
@@ -39,21 +39,52 @@ class Db:
                     except Exception as e:
                         pass
                     open(db_path, 'w').close()
-            self.engine = create_engine(con_str,
-                                     pool_size=2,          # 最小空闲连接数
-                                     max_overflow=20,      # 允许的最大溢出连接数
-                                     pool_timeout=30,      # 获取连接时的超时时间（秒）
-                                     echo=False,
-                                     pool_recycle=60,  # 连接池回收时间（秒）
-                                     isolation_level="AUTOCOMMIT",  # 设置隔离级别
-                                    #  isolation_level="READ COMMITTED",  # 设置隔离级别
-                                    #  query_cache_size=0,
-                                     connect_args={"check_same_thread": False} if con_str.startswith('sqlite:///') else {}
-                                     )
+            self.engine = create_engine(
+                con_str,
+                pool_size=2,          # 最小空闲连接数
+                max_overflow=20,      # 允许的最大溢出连接数
+                pool_timeout=30,      # 获取连接时的超时时间（秒）
+                echo=False,
+                pool_pre_ping=True,   # 每次从连接池取连接时做轻量探活，避免断链炸请求
+                pool_recycle=1800,    # 避免服务端主动断开旧连接
+                isolation_level="AUTOCOMMIT",
+                connect_args={"check_same_thread": False} if con_str.startswith('sqlite:///') else {},
+            )
             self.session_factory=self.get_session_factory()
+            self._ensure_runtime_indexes()
         except Exception as e:
             print(f"Error creating database connection: {e}")
             raise
+
+    def _ensure_runtime_indexes(self) -> None:
+        """
+        为高频查询补运行时索引（幂等）。
+        兼容历史数据库：无需重建表即可提升频道/文章检索性能。
+        """
+        if self.engine is None:
+            return
+        try:
+            inspector = inspect(self.engine)
+            table_names = set(inspector.get_table_names())
+            specs = [
+                ("articles", "idx_articles_mp_id", "CREATE INDEX idx_articles_mp_id ON articles (mp_id)"),
+                ("articles", "idx_articles_mp_pub_time", "CREATE INDEX idx_articles_mp_pub_time ON articles (mp_id, publish_time)"),
+                ("articles", "idx_articles_status_pub_time", "CREATE INDEX idx_articles_status_pub_time ON articles (status, publish_time)"),
+            ]
+            with self.engine.begin() as conn:
+                for table, idx_name, ddl in specs:
+                    if table not in table_names:
+                        continue
+                    existing = {x.get("name") for x in inspector.get_indexes(table)}
+                    if idx_name in existing:
+                        continue
+                    try:
+                        conn.execute(sql_text(ddl))
+                        print_info(f"[{self.tag}] create index: {idx_name}")
+                    except Exception as e:
+                        print_warning(f"[{self.tag}] create index failed {idx_name}: {e}")
+        except Exception as e:
+            print_warning(f"[{self.tag}] ensure runtime indexes failed: {e}")
     def create_tables(self):
         """Create all tables defined in models"""
         # Ensure all models are imported so they are registered on Base.metadata
@@ -276,17 +307,6 @@ class Db:
         if not session.is_active:
             from core.print import print_info
             print_info(f"[{self.tag}] Session is already closed.")
-            _session()
-            return self.Session()
-        # 检查数据库连接是否已断开
-        try:
-            from core.models import User
-            # 尝试执行一个简单的查询来检查连接状态
-            session.query(User.id).count()
-        except Exception as e:
-            from core.print import print_warning
-            print_warning(f"[{self.tag}] Database connection lost: {e}. Reconnecting...")
-            self.init(self.connection_str)
             _session()
             return self.Session()
         return session

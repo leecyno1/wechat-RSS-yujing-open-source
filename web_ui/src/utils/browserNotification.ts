@@ -87,7 +87,7 @@ function stopTitleFlash() {
  */
 export function resetTitle() {
   stopTitleFlash()
-  document.title = originalTitle || 'WeRSS'
+  document.title = originalTitle || '大圣之怒订阅助手'
 }
 
 /**
@@ -114,9 +114,9 @@ async function checkForNewArticles() {
       
       // 发送浏览器通知（如果用户授权）
       if (Notification.permission === 'granted') {
-        new Notification('WeRSS - 新文章通知', {
+        new Notification('大圣之怒 - 新文章通知', {
           body: `检测到 ${newCount} 篇新文章`,
-          icon: '/logo.svg'
+          icon: '/static/logo-original.png'
         })
       }
     }

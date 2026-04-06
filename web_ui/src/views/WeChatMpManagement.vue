@@ -105,7 +105,7 @@ const loadData = async () => {
     pagination.total = (res as any)?.total || (res as any)?.data?.total || 0
   } catch (error) {
     console.error('获取公众号列表错误:', error)
-    Message.error((error as any)?.message || String(error || '获取公众号列表失败'))
+    Message.error((error as any)?.message || '获取公众号列表失败')
   }
 }
 

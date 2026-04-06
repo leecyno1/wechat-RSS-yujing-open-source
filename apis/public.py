@@ -2,7 +2,7 @@ import json
 import re
 
 from fastapi import APIRouter, HTTPException, Query, status as fast_status
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 
 from apis.base import error_response, success_response
 from core.config import cfg
@@ -11,11 +11,44 @@ from core.insights import InsightsService
 from core.models.article import Article
 from core.models.feed import Feed
 from core.models.article_insight import ArticleInsight
+from core.models.user import User
+from core.models.user_subscription import UserSubscription
 from core.insights.extract import html_to_text
-from core.queue import InsightsQueue
+from core.queue import PriorityInsightsQueue
 
 
 router = APIRouter(prefix="/public", tags=["公开"])
+
+
+def _normalize_public_platform(raw: str | None, source_type: str | None = None, faker_id: str | None = None) -> str:
+    p = str(raw or "").strip().lower()
+    if not p:
+        p = "wechat" if str(faker_id or "").strip() else str(source_type or "rss").strip().lower()
+    if p == "wx":
+        return "wechat"
+    if p == "rsshub":
+        return "rss"
+    if p in {
+        "wsj",
+        "bbc",
+        "nytimes",
+        "guardian",
+        "cnn",
+        "npr",
+        "cnbc",
+        "global_news",
+        "global_tech",
+        "global_finance",
+        "global_programming",
+        "global_startups",
+        "china_news",
+        "china_tech",
+        "china_finance",
+        "china_product",
+        "tech",
+    }:
+        return "portal"
+    return p or "wechat"
 
 
 def _estimate_word_count(text: str) -> int:
@@ -27,7 +60,11 @@ def _estimate_word_count(text: str) -> int:
 
 def _serialize_channel(feed: Feed) -> dict:
     source_type = str(feed.source_type or "wechat")
-    source_platform = str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss"))
+    source_platform = _normalize_public_platform(
+        str(feed.source_platform or ""),
+        source_type,
+        str(feed.faker_id or ""),
+    )
     return {
         "id": feed.id,
         "name": feed.mp_name or "",
@@ -108,21 +145,115 @@ async def list_public_channels(
     kw: str = Query(""),
 ):
     session = DB.get_session()
-    query = session.query(Feed).filter(
-        or_(
-            and_(Feed.faker_id.isnot(None), Feed.faker_id != ""),
-            Feed.source_type.in_(["rss", "rsshub"]),
-        )
+    supported_feed_filter = or_(
+        and_(Feed.faker_id.isnot(None), Feed.faker_id != ""),
+        Feed.source_type.in_(["rss", "rsshub"]),
     )
+    query = session.query(Feed).filter(supported_feed_filter)
+    using_admin_defaults = False
+
+    # 游客默认展示 admin 当前订阅的全量来源（若存在），确保未登录视图与站点默认配置一致。
+    try:
+        admin_user = (
+            session.query(User)
+            .filter(func.lower(User.username) == "admin")
+            .order_by(User.created_at.asc())
+            .first()
+        )
+        admin_uid = str(getattr(admin_user, "id", "") or "").strip()
+        if admin_uid:
+            admin_query = (
+                session.query(Feed)
+                .join(UserSubscription, UserSubscription.feed_id == Feed.id)
+                .filter(UserSubscription.user_id == admin_uid)
+                .filter(supported_feed_filter)
+            )
+            if admin_query.first() is not None:
+                query = admin_query
+                using_admin_defaults = True
+    except Exception:
+        using_admin_defaults = False
+
     if kw:
         query = query.filter(Feed.mp_name.ilike(f"%{kw}%"))
-    total = query.count()
-    feeds = query.order_by(Feed.created_at.desc()).limit(limit).offset(offset).all()
+        total = query.count()
+        feeds = query.order_by(Feed.created_at.desc()).limit(limit).offset(offset).all()
+        return success_response(
+            {
+                "list": [_serialize_channel(f) for f in feeds],
+                "total": total,
+                "page": {"limit": limit, "offset": offset, "total": total},
+            }
+        )
+
+    rows = (
+        session.query(Article.mp_id, func.max(Article.publish_time).label("latest_publish_time"))
+        .group_by(Article.mp_id)
+        .all()
+    )
+    latest_publish_map = {str(mp_id): int(ts or 0) for mp_id, ts in rows if mp_id}
+
+    def _feed_score(feed: Feed) -> int:
+        fid = str(feed.id or "")
+        latest_publish = int(latest_publish_map.get(fid, 0) or 0)
+        update_time = int(getattr(feed, "update_time", 0) or 0)
+        sync_time = int(getattr(feed, "sync_time", 0) or 0)
+        created = 0
+        try:
+            created = int(feed.created_at.timestamp()) if getattr(feed, "created_at", None) else 0
+        except Exception:
+            created = 0
+        return max(latest_publish, update_time, sync_time, created)
+
+    if using_admin_defaults:
+        feeds_all = query.all()
+        feeds_all.sort(key=_feed_score, reverse=True)
+        total = len(feeds_all)
+        feeds = feeds_all[offset : offset + limit]
+        return success_response(
+            {
+                "list": [_serialize_channel(f) for f in feeds],
+                "total": total,
+                "page": {"limit": limit, "offset": offset, "total": total, "default_mode": "admin_subscriptions"},
+            }
+        )
+
+    # 回退模式：按平台推荐固定数量，避免首次进入“空平台/全量过多”。
+    per_platform = max(1, min(10, int(cfg.get("public.default_per_platform", 3) or 3)))
+    platform_order_raw = str(
+        cfg.get(
+            "public.platform_order",
+            "wechat,zhihu,xueqiu,toutiao,baijiahao,weibo,portal,rss",
+        )
+        or "wechat,zhihu,xueqiu,toutiao,baijiahao,weibo,portal,rss"
+    )
+    platform_order = [x.strip().lower() for x in platform_order_raw.split(",") if x.strip()]
+    if not platform_order:
+        platform_order = ["wechat", "zhihu", "xueqiu", "toutiao", "baijiahao", "weibo", "portal", "rss"]
+
+    feeds_all = query.order_by(Feed.created_at.desc()).all()
+    by_platform: dict[str, list[Feed]] = {}
+    for feed in feeds_all:
+        p = _normalize_public_platform(str(feed.source_platform or ""), str(feed.source_type or ""), str(feed.faker_id or ""))
+        if p not in platform_order:
+            continue
+        by_platform.setdefault(p, []).append(feed)
+
+    selected: list[Feed] = []
+    for p in platform_order:
+        bucket = by_platform.get(p, [])
+        if not bucket:
+            continue
+        bucket.sort(key=_feed_score, reverse=True)
+        selected.extend(bucket[:per_platform])
+
+    feeds = selected[offset : offset + limit]
+    total = len(selected)
     return success_response(
         {
             "list": [_serialize_channel(f) for f in feeds],
             "total": total,
-            "page": {"limit": limit, "offset": offset, "total": total},
+            "page": {"limit": limit, "offset": offset, "total": total, "default_mode": True},
         }
     )
 
@@ -159,7 +290,11 @@ async def list_public_channel_articles(
                 "mp_id": article.mp_id or "",
                 "mp_name": feed.mp_name or "",
                 "pic_url": article.pic_url or "",
-                "source_platform": str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss")),
+                "source_platform": _normalize_public_platform(
+                    str(feed.source_platform or ""),
+                    str(feed.source_type or ""),
+                    str(feed.faker_id or ""),
+                ),
                 "read_count": getattr(article, "read_count", None),
                 "like_count": getattr(article, "like_count", None),
                 "share_count": getattr(article, "share_count", None),
@@ -184,7 +319,7 @@ async def list_public_channel_articles(
     )
 
 
-@router.get("/insights/{article_id}", summary="公开文章洞察(摘要/关键信息)")
+@router.get("/insights/{article_id:path}", summary="公开文章洞察(摘要/关键信息)")
 async def get_public_insights(article_id: str):
     service = InsightsService()
     insight = service.get_or_create_basic(article_id)
@@ -199,7 +334,7 @@ async def get_public_insights(article_id: str):
         auto_kp = bool(cfg.get("insights.auto_key_points", True))
         auto_bd = bool(cfg.get("insights.auto_llm_breakdown", False))
         if (auto_kp and not (getattr(insight, "key_points_json", None) or "")) or (auto_bd and not (getattr(insight, "llm_breakdown_json", None) or "")):
-            InsightsQueue.add_task(service.ensure_cached, article_id)
+            PriorityInsightsQueue.add_task(service.ensure_cached, article_id)
     except Exception:
         pass
 

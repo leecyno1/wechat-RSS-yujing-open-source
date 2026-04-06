@@ -11,6 +11,8 @@ from .config_management import ConfigManagement
 # 洞察/收藏/笔记
 from .article_insight import ArticleInsight
 from .article_favorite import ArticleFavorite
+from .article_favorite_meta import ArticleFavoriteMeta
+from .favorite_category import FavoriteCategory
 from .article_note import ArticleNote
 # 用户订阅/阅读状态（多用户隔离）
 from .user_subscription import UserSubscription

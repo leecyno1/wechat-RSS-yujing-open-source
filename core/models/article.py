@@ -1,7 +1,14 @@
+from sqlalchemy import Index
+
 from  .base import Base,Column,String,Integer,DateTime,Text,DATA_STATUS
 class ArticleBase(Base):
     from_attributes = True
     __tablename__ = 'articles'
+    __table_args__ = (
+        Index("idx_articles_mp_id", "mp_id"),
+        Index("idx_articles_mp_pub_time", "mp_id", "publish_time"),
+        Index("idx_articles_status_pub_time", "status", "publish_time"),
+    )
     id = Column(String(255), primary_key=True)
     mp_id = Column(String(255))
     title = Column(String(1000))

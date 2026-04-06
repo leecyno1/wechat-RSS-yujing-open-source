@@ -125,11 +125,31 @@ def start_all_task():
     except Exception as e:
         print_error(f"启动自动全量更新失败: {e}")
     try:
-        from jobs.digest import start_digest_outbox
-
-        start_digest_outbox()
+        if bool(cfg.get("feature.wechat_binding_push_enable", False)):
+            from jobs.digest import start_digest_outbox
+            start_digest_outbox()
+        else:
+            print_info("公众号绑定/推送链路已关闭，跳过 digest outbox 定时任务")
     except Exception as e:
         print_error(f"启动合集推送 outbox 失败: {e}")
+    try:
+        from jobs.source_content_backfill import start_source_content_backfill
+
+        start_source_content_backfill()
+    except Exception as e:
+        print_error(f"启动正文回填定时任务失败: {e}")
+    try:
+        from jobs.parser_orchestrator import start_parser_orchestrator
+
+        start_parser_orchestrator()
+    except Exception as e:
+        print_error(f"启动解析编排定时任务失败: {e}")
+    try:
+        from jobs.article_cleanup import start_article_cleanup
+
+        start_article_cleanup()
+    except Exception as e:
+        print_error(f"启动历史文章清理定时任务失败: {e}")
 if __name__ == '__main__':
     # do_job()
     # start_all_task()

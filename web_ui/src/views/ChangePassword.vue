@@ -62,6 +62,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { changePassword } from '@/api/user'
+import { clearAuthSession } from '@/utils/auth'
 
 const router = useRouter()
 const loading = ref(false)
@@ -138,7 +139,7 @@ const handleSubmit = async () => {
     if (response.code === 0) {
       Message.success('密码修改成功')
       // 清除token强制重新登录
-      localStorage.removeItem('token')
+      clearAuthSession()
       setTimeout(() => {
         router.push('/login')
       }, 1500)

@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM docker.1ms.run/node:20-bookworm-slim AS ui-builder
+FROM --platform=$BUILDPLATFORM docker.m.daocloud.io/library/node:20-bookworm-slim AS ui-builder
 WORKDIR /ui
 COPY web_ui/package.json web_ui/yarn.lock ./
 RUN corepack enable && yarn install --frozen-lockfile

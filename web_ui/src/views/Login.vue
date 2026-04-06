@@ -1,37 +1,8 @@
 <template>
   <div class="login-container">
     <div class="login-layout">
-      <!-- 左侧介绍区域 -->
+      <!-- 左侧登录区域 -->
       <div class="login-left">
-        <div class="login-intro">
-          <img class="intro-logo" :src="drLemonLogo" alt="Dr.Lemon Logo" />
-          <h1 class="intro-title">{{appTitle}}</h1>
-          <p class="intro-text">
-            一个用于订阅和管理微信公众号内容的工具，提供RSS订阅功能
-          </p>
-          <div class="login-features">
-            <div class="feature-item">
-              <icon-check-circle />
-              <span>公众号内容抓取和解析</span>
-            </div>
-            <div class="feature-item">
-              <icon-check-circle />
-              <span>RSS订阅生成</span>
-            </div>
-            <div class="feature-item">
-              <icon-check-circle />
-              <span>定时自动更新内容</span>
-            </div>
-            <div class="feature-item">
-              <icon-check-circle />
-              <span>公众号监测、消息通知、WebHook调用 </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 右侧登录区域 -->
-      <div class="login-right">
         <a-card class="login-card" :bordered="false">
           <a-form :model="form" @submit="handleSubmit">
             <a-form-item field="username" label="帐号">
@@ -60,6 +31,33 @@
           </a-form>
         </a-card>
       </div>
+
+      <!-- 右侧品牌卡片 -->
+      <div class="login-right">
+        <div class="login-intro">
+          <img class="intro-logo" :src="dashengLogo" alt="大圣之怒 Logo" />
+          <h1 class="intro-title">{{appTitle}}</h1>
+          <p class="intro-text">全平台订阅与资讯编排中心，统一管理公众号与RSS来源，打造你的专属信息流。</p>
+          <div class="login-features">
+            <div class="feature-item">
+              <icon-check-circle />
+              <span>公众号与多平台内容抓取</span>
+            </div>
+            <div class="feature-item">
+              <icon-check-circle />
+              <span>频道化聚合与订阅分发</span>
+            </div>
+            <div class="feature-item">
+              <icon-check-circle />
+              <span>定时刷新与自动摘要</span>
+            </div>
+            <div class="feature-item">
+              <icon-check-circle />
+              <span>公众号监测、消息通知、WebHook调用</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="login-footer">
       <div class="copyright">Design By Rachel</div>
@@ -74,8 +72,21 @@
       <a-form-item field="password" label="密码">
         <a-input-password v-model="registerForm.password" placeholder="至少6位" />
       </a-form-item>
-      <a-form-item field="email" label="邮箱(可选)">
+      <a-form-item field="email" label="注册邮箱">
         <a-input v-model="registerForm.email" placeholder="name@example.com" />
+      </a-form-item>
+      <a-form-item field="verify_code" label="邮箱验证码">
+        <a-space style="width: 100%;">
+          <a-input v-model="registerForm.verify_code" placeholder="请输入验证码" />
+          <a-button
+            type="outline"
+            :loading="codeSending"
+            :disabled="codeSending || codeCooldown > 0"
+            @click="sendCode"
+          >
+            {{ codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+          </a-button>
+        </a-space>
       </a-form-item>
     </a-form>
     <template #footer>
@@ -88,13 +99,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { login, register } from '@/api/auth'
-import drLemonLogo from '@/assets/drlemon-logo.svg'
+import { login, register, sendRegisterEmailCode } from '@/api/auth'
+import dashengLogo from '@/assets/logo-original.png'
+import { setAuthSession } from '@/utils/auth'
 
-const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || 'Dr.Lemon订阅助手')
+const appTitle = computed(() => import.meta.env.VITE_APP_TITLE || '大圣之怒订阅助手')
 
 const router = useRouter()
 const loading = ref(false)
@@ -105,35 +117,72 @@ const form = ref({
 
 const registerVisible = ref(false)
 const registerLoading = ref(false)
-const registerForm = ref<{ username: string; password: string; email: string }>({
+const codeSending = ref(false)
+const codeCooldown = ref(0)
+let codeTimer: ReturnType<typeof setInterval> | null = null
+const registerForm = ref<{ username: string; password: string; email: string; verify_code: string }>({
   username: '',
   password: '',
-  email: ''
+  email: '',
+  verify_code: ''
 })
 
 const openRegister = () => {
-  registerForm.value = { username: form.value.username || '', password: '', email: '' }
+  registerForm.value = { username: form.value.username || '', password: '', email: '', verify_code: '' }
   registerVisible.value = true
 }
+
+const isValidEmail = (email: string) => /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(String(email || '').trim())
+
+const startCooldown = (seconds = 60) => {
+  codeCooldown.value = Math.max(0, Number(seconds || 60))
+  if (codeTimer) clearInterval(codeTimer)
+  codeTimer = setInterval(() => {
+    codeCooldown.value = Math.max(0, codeCooldown.value - 1)
+    if (codeCooldown.value <= 0 && codeTimer) {
+      clearInterval(codeTimer)
+      codeTimer = null
+    }
+  }, 1000)
+}
+
+const sendCode = async () => {
+  if (codeSending.value || codeCooldown.value > 0) return
+  const email = registerForm.value.email.trim()
+  if (!isValidEmail(email)) {
+    Message.error('请输入有效邮箱')
+    return
+  }
+  codeSending.value = true
+  try {
+    const res: any = await sendRegisterEmailCode({ email })
+    startCooldown(60)
+    Message.success(`验证码已发送（有效期约 ${Number(res?.ttl_minutes || 10)} 分钟）`)
+  } catch (e: any) {
+    Message.error((typeof e === 'string' ? e : e?.message) || '发送验证码失败')
+  } finally {
+    codeSending.value = false
+  }
+}
+
+onUnmounted(() => {
+  if (codeTimer) {
+    clearInterval(codeTimer)
+    codeTimer = null
+  }
+})
 
 const handleSubmit = async () => {
   loading.value = true
   try {
-    // 使用URLSearchParams格式发送请求
-    const formData = new URLSearchParams()
-    formData.append('username', form.value.username)
-    formData.append('password', form.value.password)
-    
     const res = await login({
       username: form.value.username,
       password: form.value.password
     })
     
           if (res.access_token) {
-            // 存储token和过期时间
-            localStorage.setItem('token', res.access_token)
-            localStorage.setItem('token_expire', 
-              Date.now() + (res.expires_in * 1000))
+            // 存储 token 与到期时间（优先后端返回的 expires_in）
+            setAuthSession(res.access_token, Number((res as any)?.expires_in || 0))
         
             console.log('Token stored:', localStorage.getItem('token')) // 调试日志
         
@@ -162,6 +211,7 @@ const handleRegister = async () => {
   const username = registerForm.value.username.trim()
   const password = registerForm.value.password
   const email = registerForm.value.email.trim()
+  const verifyCode = registerForm.value.verify_code.trim()
 
   if (!username || username.length < 2) {
     Message.error('请输入至少2位的帐号')
@@ -171,25 +221,23 @@ const handleRegister = async () => {
     Message.error('请输入至少6位的密码')
     return
   }
+  if (!isValidEmail(email)) {
+    Message.error('请输入有效邮箱')
+    return
+  }
+  if (!verifyCode) {
+    Message.error('请输入邮箱验证码')
+    return
+  }
 
   registerLoading.value = true
   try {
-    const res: any = await register({ username, password, email: email || undefined })
+    const res: any = await register({ username, password, email, verify_code: verifyCode })
     if (res?.access_token) {
-      localStorage.setItem('token', res.access_token)
-      localStorage.setItem('token_expire', Date.now() + ((res.expires_in || 0) * 1000))
-      localStorage.setItem(
-        'drlemon_new_user_guide',
-        JSON.stringify({
-          username,
-          default_subscribed: Number(res?.default_subscribed || 0),
-          ts: Date.now()
-        })
-      )
+      setAuthSession(res.access_token, Number(res?.expires_in || 0))
       registerVisible.value = false
-      await router.push('/channels?onboard=1')
-      const n = Number(res?.default_subscribed || 0)
-      Message.success(n > 0 ? `注册成功，已自动订阅 ${n} 个频道` : '注册成功')
+      await router.push('/channels?plaza=1')
+      Message.success('注册成功，请先选择你感兴趣的订阅源')
       return
     }
     throw new Error('无效的响应格式')
@@ -206,21 +254,7 @@ const handleRegister = async () => {
   height: 100vh;
   padding: 0;
   margin: 0;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(168, 85, 247, 0.9) 100%);
-  background-size: 200% 200%;
-  animation: gradientBG 12s ease infinite;
-}
-
-@keyframes gradientBG {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  background: var(--color-bg-1);
 }
 
 .login-layout {
@@ -247,7 +281,7 @@ const handleRegister = async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background: transparent;
+  background: var(--brand-blue-6);
 }
 
 .intro-title {
@@ -285,7 +319,7 @@ const handleRegister = async () => {
   justify-content: center;
   align-items: center;
   padding: 60px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(248, 250, 255, 0.92);
   backdrop-filter: blur(5px);
   border: none;
   box-shadow: none;
@@ -442,16 +476,16 @@ const handleRegister = async () => {
   transition: all 0.2s ease;
   font-weight: 500;
   font-size: 15px;
-  background: #4299e1;
-  border-color: #4299e1;
+  background: #d9234e;
+  border-color: #d9234e;
   color: white;
 }
 
 :deep(.arco-btn-primary:hover) {
-  background: #3182ce;
-  border-color: #3182ce;
+  background: #b9153f;
+  border-color: #b9153f;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.3);
+  box-shadow: 0 8px 20px rgba(29, 73, 220, 0.28);
 }
 
 :deep(.arco-btn-primary:active) {
@@ -641,15 +675,12 @@ const handleRegister = async () => {
 
 /* --- Theme + Apple-like overrides (follow system light/dark) --- */
 .login-container {
-  background:
-    radial-gradient(1200px circle at 20% 20%, color-mix(in srgb, var(--color-primary-6) 14%, transparent), transparent 60%),
-    radial-gradient(900px circle at 80% 0%, color-mix(in srgb, var(--color-success-6) 10%, transparent), transparent 55%),
-    var(--color-bg-1) !important;
+  background: var(--color-bg-1) !important;
   animation: none !important;
 }
 
 .login-left {
-  color: var(--color-text-1) !important;
+  color: #fff !important;
 }
 
 .intro-title,
@@ -707,17 +738,77 @@ const handleRegister = async () => {
 }
 
 :deep(.arco-btn-primary) {
-  background: var(--color-primary-6) !important;
+  background: var(--brand-red-6) !important;
   border: none !important;
   color: var(--color-white, #fff) !important;
 }
 
 :deep(.arco-btn-primary:hover) {
-  background: var(--color-primary-5) !important;
+  background: var(--brand-red-7) !important;
 }
 
 :deep(.arco-btn-primary .arco-btn-content),
 :deep(.arco-btn-primary .arco-btn-text) {
   color: var(--color-white, #fff) !important;
 }
+
+/* Final layout override: left form / right brand card */
+.login-layout {
+  flex-direction: row !important;
+}
+
+.login-left {
+  flex: 0 0 44% !important;
+  background: color-mix(in srgb, var(--color-bg-2) 70%, transparent) !important;
+  color: var(--color-text-1) !important;
+  border-right: 1px solid var(--color-border) !important;
+  border-left: none !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 48px !important;
+}
+
+.login-right {
+  flex: 0 0 56% !important;
+  background: var(--brand-blue-6) !important;
+  color: #fff !important;
+  border-left: none !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 56px !important;
+}
+
+.login-card {
+  width: 420px !important;
+  max-width: 100% !important;
+  margin: 0 auto !important;
+}
+
+.login-intro {
+  max-width: 620px !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 992px) {
+  .login-layout {
+    flex-direction: column !important;
+  }
+
+  .login-left,
+  .login-right {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    border: none !important;
+    padding: 28px !important;
+  }
+
+  .login-left {
+    order: 1 !important;
+  }
+
+  .login-right {
+    order: 2 !important;
+  }
+}
+
 </style>

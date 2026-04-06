@@ -9,7 +9,7 @@
       >
         <a-tab-pane key="system" title="系统" />
         <a-tab-pane key="configs" title="配置" />
-        <a-tab-pane key="starter-pack" title="订阅包" />
+        <a-tab-pane key="starter-pack" title="订阅与模型" />
       </a-tabs>
     </div>
 
@@ -26,6 +26,7 @@ const router = useRouter()
 
 const activeTab = computed(() => {
   const path = route.path || ''
+  if (path.includes('/models')) return 'starter-pack'
   if (path.includes('/starter-pack')) return 'starter-pack'
   if (path.includes('/configs')) return 'configs'
   return 'system'

@@ -6,7 +6,7 @@ import os
 import json
 import ipaddress
 import urllib.request
-from fastapi import APIRouter,Depends
+from fastapi import APIRouter,Depends,HTTPException
 from typing import Dict, Any
 from core.auth import get_current_user
 from .base import success_response, error_response
@@ -47,10 +47,13 @@ async def get_base_info() -> Dict[str, Any]:
         }
         return success_response(data=base_info)
     except Exception as e:
-        return error_response(
-            code=50001,
-            message=f"获取信息失败: {str(e)}"
-        )    
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(
+                code=50001,
+                message=f"获取信息失败: {str(e)}"
+            ),
+        )
     
 
 _PROMO_QR_CACHE: dict[str, Any] = {"url": None, "png": None}
@@ -60,7 +63,7 @@ _EGRESS_IP_CACHE: dict[str, Any] = {"ts": 0.0, "ip": "", "source": ""}
 @router.get("/promo/qr", summary="推广二维码(关注公众号)")
 async def promo_qr() -> Response:
     """Return PNG QR code for promo.qr_url (or PROMO_QR_URL env via config)."""
-    qr_file = str(cfg.get("promo.qr_file", "static/promo/lemon_doctor_qr.jpg") or "static/promo/lemon_doctor_qr.jpg").strip()
+    qr_file = str(cfg.get("promo.qr_file", "static/promo/dasheng_qr.jpg") or "static/promo/dasheng_qr.jpg").strip()
     if qr_file and os.path.exists(qr_file):
         try:
             with open(qr_file, "rb") as f:
@@ -154,10 +157,13 @@ async def get_egress_ip() -> Dict[str, Any]:
     except Exception:
         local_ip = ""
 
-    return error_response(
-        code=50003,
-        message="获取出口IP失败：服务可能无外网访问权限，或被网关拦截。",
-        data={"ip": None, "source": None, "cached": False, "local_ip": local_ip, "errors": errors, "hint": "请在公众号后台把出口IP加入 IP白名单后重试（注意：local_ip 不是出口IP）。"},
+    raise HTTPException(
+        status_code=500,
+        detail=error_response(
+            code=50003,
+            message="获取出口IP失败：服务可能无外网访问权限，或被网关拦截。",
+            data={"ip": None, "source": None, "cached": False, "local_ip": local_ip, "errors": errors, "hint": "请在公众号后台把出口IP加入 IP白名单后重试（注意：local_ip 不是出口IP）。"},
+        ),
     )
 
 
@@ -181,9 +187,12 @@ async def system_resources(
             resources_info["insights_queue"] = InsightsQueue.get_queue_info()
         return success_response(data=resources_info)
     except Exception as e:
-        return error_response(
-            code=50002,
-            message=f"获取系统资源失败: {str(e)}"
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(
+                code=50002,
+                message=f"获取系统资源失败: {str(e)}"
+            ),
         )
 from core.article_lax import laxArticle
 from .ver import API_VERSION
@@ -235,7 +244,10 @@ async def get_system_info(
         }
         return success_response(data=system_info)
     except Exception as e:
-        return error_response(
-            code=50001,
-            message=f"获取系统信息失败: {str(e)}"
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(
+                code=50001,
+                message=f"获取系统信息失败: {str(e)}"
+            ),
         )

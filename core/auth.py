@@ -16,7 +16,16 @@ import json
 DB=db.Db(tag="用户连接")
 SECRET_KEY = cfg.get("secret","csol2025")  # 生产环境应使用更安全的密钥
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(cfg.get("token_expire_minutes",30))
+if str(SECRET_KEY or "") in {"", "csol2025", "we-mp-rss"}:
+    from core.print import print_warning
+    print_warning("[auth] SECRET_KEY 使用默认值，公网部署请立即替换为高强度随机密钥")
+try:
+    _token_expire_raw = int(cfg.get("token_expire_minutes", 43200) or 43200)
+except Exception:
+    _token_expire_raw = 43200
+# Relax session policy: keep users logged in for long periods by default.
+# <=0 means "never expire", otherwise enforce at least 30 days.
+ACCESS_TOKEN_EXPIRE_MINUTES = _token_expire_raw if _token_expire_raw <= 0 else max(_token_expire_raw, 43200)
 
 class PasswordHasher:
     """自定义密码哈希器，替代passlib的CryptContext"""
@@ -48,7 +57,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{API_BASE}/auth/token",auto_erro
 _user_cache = {}
 # 登录失败次数记录
 _login_attempts = {}
-MAX_LOGIN_ATTEMPTS = 5
+try:
+    MAX_LOGIN_ATTEMPTS = int(cfg.get("auth.max_login_attempts", 20) or 20)
+except Exception:
+    MAX_LOGIN_ATTEMPTS = 20
+MAX_LOGIN_ATTEMPTS = max(0, MAX_LOGIN_ATTEMPTS)
 
 def get_login_attempts(username: str) -> int:
     """获取用户登录失败次数"""
@@ -86,9 +99,9 @@ from apis.base import error_response
 def authenticate_user(username: str, password: str) -> Optional[DBUser]:
     """验证用户凭据"""
     # 检查是否超过最大尝试次数
-    if _login_attempts.get(username, 0) >= MAX_LOGIN_ATTEMPTS:
+    if MAX_LOGIN_ATTEMPTS > 0 and _login_attempts.get(username, 0) >= MAX_LOGIN_ATTEMPTS:
         raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=error_response(
                 code=40101,
                 message="用户名或密码错误，您的帐号已锁定，请稍后再试"
@@ -100,12 +113,15 @@ def authenticate_user(username: str, password: str) -> Optional[DBUser]:
     if not user or not pwd_context.verify(password, user.password_hash):
         # 增加失败次数
         _login_attempts[username] = _login_attempts.get(username, 0) + 1
-        remaining_attempts = MAX_LOGIN_ATTEMPTS - _login_attempts[username]
+        remaining_attempts = max(0, MAX_LOGIN_ATTEMPTS - _login_attempts[username])
+        msg = "用户名或密码错误"
+        if MAX_LOGIN_ATTEMPTS > 0:
+            msg = f"用户名或密码错误，您还有{remaining_attempts}次机会"
         raise HTTPException(
-            status_code=status.HTTP_202_ACCEPTED,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error_response(
                 code=40101,
-                message=f"用户名或密码错误，您还有{remaining_attempts}次机会"
+                message=msg
             )
         )
     
@@ -117,12 +133,29 @@ def authenticate_user(username: str, password: str) -> Optional[DBUser]:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """创建JWT Token"""
     to_encode = data.copy()
-    if expires_delta:
+    if expires_delta is not None:
         expire = datetime.utcnow() + expires_delta
+    elif ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        expire = None
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    if expire is not None:
+        to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_token_expiry_delta() -> Optional[timedelta]:
+    """返回 access token 过期时长；<=0 表示永不过期。"""
+    if ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        return None
+    return timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+
+def get_token_expires_in_seconds() -> int:
+    """返回 token 剩余秒数配置；0 表示不自动过期。"""
+    if ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        return 0
+    return int(ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     """获取当前用户"""
@@ -147,6 +180,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         "username": user.username,
         "role": user.role,
         "permissions": user.permissions,
+        "exp": payload.get("exp"),
         "original_user": user
     }
 

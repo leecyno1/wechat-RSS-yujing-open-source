@@ -86,7 +86,7 @@ async def export_mps(
     except Exception as e:
         print(f"导出公众号列表错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="导出公众号列表失败"
@@ -188,7 +188,7 @@ async def import_mps(
         session.rollback()
         print(f"导入公众号列表错误: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="导入公众号列表失败"

@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import BasicLayout from '../components/Layout/BasicLayout.vue'
-import ExportRecords from '../views/ExportRecords.vue'
 import Login from '../views/Login.vue'
-import ArticleList from '../views/ArticleList.vue'
 import ChangePassword from '../views/ChangePassword.vue'
 import EditUser from '../views/EditUser.vue'
 import AddSubscription from '../views/AddSubscription.vue'
@@ -64,12 +62,7 @@ const routes = [
       },
       {
         path: 'export/records',
-        name: 'ExportList',
-        component: ExportRecords,
-        meta: { 
-          requiresAuth: true,
-          permissions: ['config:view'] 
-        }
+        redirect: '/favorites',
       },
       {
         path: 'favorites',
@@ -90,13 +83,8 @@ const routes = [
         component: ManageLayout,
         meta: { requiresAuth: true },
         children: [
-          { path: '', redirect: '/manage/subscriptions' },
-          {
-            path: 'subscriptions',
-            name: 'ManageSubscriptions',
-            component: ArticleList,
-            meta: { requiresAuth: true },
-          },
+          { path: '', redirect: '/manage/topics' },
+          { path: 'subscriptions', redirect: '/channels' },
           {
             path: 'topics',
             name: 'ManageTopics',
@@ -195,6 +183,14 @@ const routes = [
               permissions: ['admin'],
             },
           },
+          {
+            path: 'models',
+            redirect: '/info/starter-pack',
+            meta: {
+              requiresAuth: true,
+              permissions: ['admin'],
+            },
+          },
         ],
       },
       {
@@ -237,6 +233,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
+  if (to.path === '/login') {
+    return next({ path: '/channels', query: { auth: '1', tab: 'login', redirect: '/channels' } })
+  }
+
   // 不需要认证的路由直接放行
   if (!to.meta.requiresAuth) {
     return next()
@@ -247,28 +247,52 @@ router.beforeEach(async (to, from, next) => {
   // 未登录则跳转登录页
   if (!token) {
     return next({
-      path: '/login',
-      query: { redirect: to.fullPath } // 保存目标路由用于登录后跳转
+      path: '/channels',
+      query: { auth: '1', tab: 'login', redirect: to.fullPath } // 首页弹框登录
     })
   }
+  // 已登录状态下，不再每次路由跳转都强制验 token。
+  // 仅在访问管理员页面时，按需获取一次用户角色。
+  const requiredPermissions = Array.isArray(to.meta?.permissions) ? (to.meta.permissions as string[]) : []
+  const needsAdmin = requiredPermissions.includes('admin') || to.path.startsWith('/info')
+  if (!needsAdmin) {
+    return next()
+  }
 
-  // 已登录状态，验证token有效性
+  let role = String(localStorage.getItem('current_user_role') || '').trim().toLowerCase()
+  if (role === 'admin') {
+    return next()
+  }
+
   try {
-    // 确保从正确路径导入verifyToken
-    const { verifyToken } = await import('@/api/auth')
-    await verifyToken()
-    next()
-  } catch (error) {
-    console.error('Token验证失败:', error)
-    // token无效时清除并跳转登录
-    localStorage.removeItem('token')
-    next({
-      path: '/login',
-      query: { 
-        redirect: to.fullPath,
-        error: 'session_expired'
-      }
-    })
+    const { getCurrentUser } = await import('@/api/auth')
+    const user: any = await getCurrentUser()
+    role = String(user?.role || '').trim().toLowerCase()
+    localStorage.setItem('current_user_role', role || 'user')
+    if (role !== 'admin') return next('/channels')
+    return next()
+  } catch (error: any) {
+    const msg = String(error?.message || error || '').toLowerCase()
+    const isAuthError =
+      msg.includes('401') ||
+      msg.includes('could not validate credentials') ||
+      msg.includes('session_expired') ||
+      msg.includes('登录已过期')
+    if (isAuthError) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('current_user_role')
+      return next({
+        path: '/channels',
+        query: {
+          auth: '1',
+          tab: 'login',
+          redirect: to.fullPath,
+          error: 'session_expired'
+        }
+      })
+    }
+    // 网络抖动等非认证错误：不强制登出，直接回到普通页面。
+    return next('/channels')
   }
 })
 

@@ -1,0 +1,67 @@
+services:
+  rsshub-browserless:
+    image: browserless/chrome:latest
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - CONCURRENT=${RSSHUB_BROWSER_CONCURRENT:-4}
+      - TIMEOUT=${RSSHUB_BROWSER_TIMEOUT:-180000}
+      - PREBOOT_CHROME=true
+
+  rsshub:
+    image: diygod/rsshub:latest
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - ALLOW_ORIGIN=*
+      - TZ=${TZ:-Asia/Shanghai}
+      - PUPPETEER_WS_ENDPOINT=ws://rsshub-browserless:3000
+    depends_on:
+      - rsshub-browserless
+
+  we-mp-rss:
+    image: ${WERS_IMAGE:-ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest}
+    restart: unless-stopped
+    ports:
+      - "${WERS_PORT:-8001}:8001"
+    env_file:
+      - path: ./.env.clawcloud
+        required: false
+    environment:
+      - DB=${DB:-sqlite:///data/db.db}
+      - USERNAME=${USERNAME:-admin}
+      - PASSWORD=${PASSWORD:-admin@123}
+      - PLANT_PATH=/app/data
+      - AUTO_RELOAD=False
+      - INSTALL=${INSTALL:-False}
+      - RSSHUB_INTERNAL_URL=http://rsshub:1200
+      - RSSHUB_PUBLIC_URL=${RSSHUB_PUBLIC_URL:-}
+    volumes:
+      - wers_data:/app/data
+    depends_on:
+      - rsshub
+
+  we-mp-rss-mcp:
+    profiles: ["mcp"]
+    build:
+      context: ..
+      dockerfile: mcp_server/Dockerfile
+    image: ${WERS_MCP_IMAGE:-we-mp-rss-mcp:clawcloud}
+    restart: unless-stopped
+    ports:
+      - "${WERS_MCP_PORT:-8090}:8090"
+    env_file:
+      - path: ./.env.clawcloud
+        required: false
+    environment:
+      - WERSS_API_BASE=http://we-mp-rss:8001/api/v1/wx
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8090
+      - MCP_PATH=/mcp
+    depends_on:
+      - we-mp-rss
+
+volumes:
+  wers_data:

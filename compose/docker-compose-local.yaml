@@ -1,5 +1,34 @@
 version: '3.9'
 services:
+  rsshub-browserless:
+    image: browserless/chrome:latest
+    container_name: we-mp-rss-rsshub-browserless
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - CONCURRENT=5
+      - TIMEOUT=300000
+      - PREBOOT_CHROME=true
+    networks:
+      - default
+
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: we-mp-rss-rsshub
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - ALLOW_ORIGIN=*
+      - TZ=Asia/Shanghai
+      - PUPPETEER_WS_ENDPOINT=ws://rsshub-browserless:3000
+    ports:
+      - "1201:1200"
+    networks:
+      - default
+    depends_on:
+      - rsshub-browserless
+
   we-mp-rss:
     build:
       context: ..
@@ -19,10 +48,12 @@ services:
       - PASSWORD=admin@123
       # 公域注册（本地默认开启，若不需要可改为 False）
       - ALLOW_REGISTER=True
-      # 本地快速启动建议关闭（采集功能如需浏览器再打开）
-      - INSTALL=False
+      # 为正文抓取准备 Playwright 浏览器依赖，首次可手动设 INSTALL=True 安装浏览器，默认关闭加速重启
+      - INSTALL=${INSTALL:-False}
       # 正式版默认关闭代码热重载（需要改的话在 env 里改 AUTO_RELOAD=True）
       - AUTO_RELOAD=False
+      - RSSHUB_INTERNAL_URL=http://rsshub:1200
+      - RSSHUB_PUBLIC_URL=http://localhost:1201
       # LLM/洞察开关统一放到 compose/.env.local（本地文件，已加入 .gitignore）
     volumes:
       - ../data:/app/data
@@ -30,6 +61,31 @@ services:
       - default
       # Reuse LangBot's docker network so LangBot plugins can call `http://we-mp-rss:8001` directly.
       - docker_langbot_network
+    depends_on:
+      - rsshub
+
+  we-mp-rss-mcp:
+    build:
+      context: ..
+      dockerfile: mcp_server/Dockerfile
+    image: we-mp-rss-mcp-local:latest
+    container_name: we-mp-rss-mcp
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    env_file:
+      - ./.env.local
+    environment:
+      - WERSS_API_BASE=http://we-mp-rss:8001/api/v1/wx
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8090
+      - MCP_PATH=/mcp
+    networks:
+      - default
+      - docker_langbot_network
+    depends_on:
+      - we-mp-rss
 
 networks:
   docker_langbot_network:

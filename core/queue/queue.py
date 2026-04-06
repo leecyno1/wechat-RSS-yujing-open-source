@@ -16,6 +16,31 @@ def _env_int(key: str, default: int) -> int:
         return default
 
 
+class InFlightGate:
+    """Small key gate used to avoid scheduling identical expensive tasks repeatedly."""
+
+    def __init__(self) -> None:
+        self._items: set[str] = set()
+        self._lock = threading.Lock()
+
+    def try_acquire(self, key: str) -> bool:
+        raw = str(key or "").strip()
+        if not raw:
+            return False
+        with self._lock:
+            if raw in self._items:
+                return False
+            self._items.add(raw)
+            return True
+
+    def release(self, key: str) -> None:
+        raw = str(key or "").strip()
+        if not raw:
+            return
+        with self._lock:
+            self._items.discard(raw)
+
+
 class TaskQueueManager:
     """In-process task queue with a small worker pool (threads).
 
@@ -117,8 +142,11 @@ class TaskQueueManager:
 # Default queues
 TaskQueue = TaskQueueManager(tag="默认", workers=_env_int("QUEUE_WORKERS", 6))
 InsightsQueue = TaskQueueManager(tag="洞察", workers=_env_int("INSIGHTS_QUEUE_WORKERS", 3))
+PriorityTaskQueue = TaskQueueManager(tag="优先", workers=_env_int("PRIORITY_QUEUE_WORKERS", 4))
+PriorityInsightsQueue = TaskQueueManager(tag="优先洞察", workers=_env_int("PRIORITY_INSIGHTS_QUEUE_WORKERS", 2))
 
 # Start background workers by default for better UX (best-effort).
 TaskQueue.run_task_background()
 InsightsQueue.run_task_background()
-
+PriorityTaskQueue.run_task_background()
+PriorityInsightsQueue.run_task_background()

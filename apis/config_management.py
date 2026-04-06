@@ -41,8 +41,10 @@ def list_configs(
                 },
                 "total": total
         })
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 @router.get("/{config_key}", summary="获取单个配置项详情")
 def get_config(
@@ -60,8 +62,10 @@ def get_config(
                 description="系统配置项",
             )
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 class ConfigManagementCreate(BaseModel):
     config_key: str
@@ -84,8 +88,10 @@ def create_config(
                 description=config_data.description,
             )
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 @router.put("/{config_key}", summary="更新配置项")
 def update_config(
@@ -105,8 +111,10 @@ def update_config(
                 description=config_data.description,
             )
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))
 
 @router.delete("/{config_key}",summary="删除配置项")
 def delete_config(
@@ -118,5 +126,7 @@ def delete_config(
         _require_admin(current_user)
         cfg.delete_path(config_key)
         return success_response(message="Config override deleted successfully")
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(code=500, message=str(e))
+        raise HTTPException(status_code=500, detail=error_response(code=50000, message=str(e)))

@@ -62,7 +62,9 @@ export const getPublicChannelArticles = (
 }
 
 export const getPublicInsights = (articleId: string) => {
-  return http.get<{ code: number; data: PublicInsights }>(`/wx/public/insights/${encodeURIComponent(articleId)}`)
+  return http.get<{ code: number; data: PublicInsights }>(`/wx/public/insights/${encodeURIComponent(articleId)}`, {
+    silentError: true
+  } as any)
 }
 
 export const getArticleDetailPublic = (articleId: string) => {

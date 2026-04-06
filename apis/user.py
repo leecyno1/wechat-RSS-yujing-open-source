@@ -43,7 +43,7 @@ async def get_user_info(current_user: dict = Depends(get_current_user)):
         raise e
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_201_CREATED,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_response(
                 code=50001,
                 message="获取用户信息失败"
@@ -170,8 +170,8 @@ async def add_user(
     except Exception as e:
         session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"用户添加失败: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50003, message=f"用户添加失败: {str(e)}"),
         )
 
 @router.put("", summary="修改用户资料")
@@ -209,7 +209,7 @@ async def update_user_info(
         # 不允许通过此接口修改密码
         if "password" in update_data:
             raise HTTPException(
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error_response(
                     code=40002,
                     message="请使用专门的密码修改接口"
@@ -232,8 +232,8 @@ async def update_user_info(
     except Exception as e:
         session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"更新失败: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50004, message=f"更新失败: {str(e)}"),
         )
    
 
@@ -249,7 +249,7 @@ async def change_password(
         if "old_password" not in password_data or "new_password" not in password_data:
             from .base import error_response
             raise HTTPException(
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error_response(
                     code=40001,
                     message="需要提供旧密码和新密码"
@@ -274,7 +274,7 @@ async def change_password(
         if not pwd_context.verify(password_data["old_password"], user.password_hash):
             from .base import error_response
             raise HTTPException(
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error_response(
                     code=40003,
                     message="旧密码不正确"
@@ -286,7 +286,7 @@ async def change_password(
         if len(new_password) < 8:
             from .base import error_response
             raise HTTPException(
-                status_code=status.HTTP_200_OK,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=error_response(
                     code=40004,
                     message="密码长度不能少于8位"
@@ -310,8 +310,8 @@ async def change_password(
     except Exception as e:
         session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"密码修改失败: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50005, message=f"密码修改失败: {str(e)}"),
         )
 @router.post("/avatar", summary="上传用户头像")
 async def upload_avatar(
@@ -342,16 +342,16 @@ async def upload_avatar(
         except Exception as e:
             session.rollback()
             raise HTTPException(
-                status_code=status.HTTP_406_NOT_ACCEPTABLE,
-                detail=f"更新用户头像失败: {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response(code=50006, message=f"更新用户头像失败: {str(e)}"),
             )
 
         from .base import success_response
         return success_response(data={"avatar": f"/{avatar_path}/{current_user['username']}.jpg"})
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"头像上传失败: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50007, message=f"头像上传失败: {str(e)}"),
         )
 @router.post("/upload", summary="上传文件")
 async def upload_file(
@@ -388,6 +388,6 @@ async def upload_file(
         raise e
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_406_NOT_ACCEPTABLE,
-            detail=f"文件上传失败: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_response(code=50008, message=f"文件上传失败: {str(e)}"),
         )

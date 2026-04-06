@@ -25,7 +25,8 @@ export const login = (data: LoginParams) => {
 export interface RegisterParams {
   username: string
   password: string
-  email?: string
+  email: string
+  verify_code: string
 }
 
 export interface RegisterResult extends LoginResult {
@@ -35,6 +36,14 @@ export interface RegisterResult extends LoginResult {
 
 export const register = (data: RegisterParams) => {
   return http.post<RegisterResult>('/wx/auth/register', data)
+}
+
+export interface SendRegisterCodeParams {
+  email: string
+}
+
+export const sendRegisterEmailCode = (data: SendRegisterCodeParams) => {
+  return http.post<{ ok: boolean; ttl_minutes: number }>('/wx/auth/register/email-code', data)
 }
 
 export interface StarterImportResult {

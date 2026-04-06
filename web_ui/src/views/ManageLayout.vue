@@ -1,10 +1,13 @@
 <template>
   <div class="manage-page">
     <div class="manage-card">
-      <a-tabs type="rounded" size="small" :active-key="activeTab" @change="onTabChange">
-        <a-tab-pane key="subscriptions" title="订阅管理" />
-        <a-tab-pane key="topics" title="频道" />
-      </a-tabs>
+      <div class="manage-toolbar">
+        <div class="manage-title">频道管理</div>
+        <a-space size="small" class="manage-actions">
+          <a-button size="small" type="primary" @click="goToCreateTopic">创建频道</a-button>
+        </a-space>
+      </div>
+      <div class="manage-hint">频道用于聚合你已订阅的来源，便于首页快速筛选。</div>
     </div>
 
     <router-view />
@@ -12,20 +15,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-
-const route = useRoute()
+import { useRouter } from 'vue-router'
 const router = useRouter()
 
-const activeTab = computed(() => {
-  const path = route.path || ''
-  if (path.includes('/topics')) return 'topics'
-  return 'subscriptions'
-})
-
-const onTabChange = (key: string) => {
-  router.push(key === 'topics' ? '/manage/topics' : '/manage/subscriptions')
+const goToCreateTopic = () => {
+  router.push('/manage/topics/add')
 }
 </script>
 
@@ -34,14 +28,39 @@ const onTabChange = (key: string) => {
   padding: 12px;
 }
 
-.manage-card {
+.manage-toolbar {
+  width: 100%;
   display: flex;
   align-items: center;
-  padding: 10px 12px;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.manage-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-1);
+}
+
+.manage-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 10px;
   border-radius: var(--app-radius-md);
   border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-bg-2) 84%, transparent);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
   margin-bottom: 12px;
+}
+
+.manage-actions {
+  flex-wrap: wrap;
+}
+
+.manage-hint {
+  margin-top: 8px;
+  color: var(--color-text-3);
+  font-size: 12px;
 }
 </style>

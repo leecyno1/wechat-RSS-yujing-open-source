@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick} from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getTag, createTag, updateTag } from '@/api/tagManagement'
-import type { Tag, TagCreate } from '@/types/tagManagement'
-import { Message } from '@arco-design/web-vue'
+import type { TagCreate } from '@/types/tagManagement'
+import { notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
 import { uploadFile } from '@/api/file'
-import MpMultiSelect from '@/components/MpMultiSelect.vue'
+import FeedMultiSelect from '@/components/FeedMultiSelect.vue'
+import { CHANNEL_LOGO_PRESETS, pickDefaultChannelLogo } from '@/constants/channelLogos'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,19 +29,26 @@ const rules = {
 const fetchTag = async (id: string) => {
   try {
     loading.value = true
-    const res = await getTag(id)
+    const res: any = await getTag(id)
+    let parsedMps: any[] = []
+    try {
+      parsedMps = JSON.parse(String(res?.mps_id || '[]'))
+      if (!Array.isArray(parsedMps)) parsedMps = []
+    } catch {
+      parsedMps = []
+    }
     formModel.value = {
       ...res,
-      mps_id: JSON.parse(res.mps_id || '[]'),
+      mps_id: parsedMps,
     }
-     // 初始化选择器数据
+    // 初始化选择器数据
     nextTick(() => {
-      if (mpSelectorRef.value) {
-        mpSelectorRef.value.parseSelected(formModel.value.mps_id)
+      if (feedSelectorRef.value) {
+        feedSelectorRef.value.parseSelected(formModel.value.mps_id as any[])
       }
     })
   } catch (error) {
-    Message.error('获取频道详情失败')
+    notifyError('获取频道详情失败')
   } finally {
     loading.value = false
   }
@@ -51,13 +59,13 @@ const handleUploadChange = async (options: any) => {
   
   // 文件类型验证
   if (!file?.type?.startsWith('image/')) {
-    Message.error('请选择图片文件 (JPEG/PNG)')
+    notifyWarning('请选择图片文件 (JPEG/PNG)')
     return
   }
 
   // 文件大小验证 (2MB)
   if (file.size > 2 * 1024 * 1024) {
-    Message.error('图片大小不能超过2MB')
+    notifyWarning('图片大小不能超过2MB')
     return
   }
 
@@ -67,31 +75,60 @@ const handleUploadChange = async (options: any) => {
     formModel.value.cover = res.url
   } catch (error) {
     console.error('上传错误:', error)
-    Message.error(`上传失败: ${error.response?.data?.message || error.message || '服务器错误'}`)
+    notifyError(`上传失败: ${(error as any)?.response?.data?.message || (error as any)?.message || '服务器错误'}`)
   } 
   return false
 }
 
 const handleExceed = () => {
-  Message.warning('只能上传一个封面文件')
+  notifyWarning('只能上传一个封面文件')
 }
 
 const handleUploadError = (error: Error) => {
-  Message.error(`上传出错: ${error.message || '文件上传失败'}`)
+  notifyError(`上传出错: ${error.message || '文件上传失败'}`)
 }
 
-const showMpSelector = ref(false)
-const mpSelectorRef = ref<InstanceType<typeof MpMultiSelect> | null>(null)
+const showFeedSelector = ref(false)
+const feedSelectorRef = ref<InstanceType<typeof FeedMultiSelect> | null>(null)
+
+const selectedCount = computed(() => {
+  const list: any[] = Array.isArray(formModel.value.mps_id) ? (formModel.value.mps_id as any[]) : []
+  return list.length
+})
+
+const selectedSummary = computed(() => {
+  const list: any[] = Array.isArray(formModel.value.mps_id) ? (formModel.value.mps_id as any[]) : []
+  return list.map((x: any) => String(x?.mp_name || x?.name || x?.id || '')).filter(Boolean).slice(0, 3).join('、')
+})
 
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
   img.src = '/default-cover.png'
 }
 
+const applyLogoPreset = (cover: string) => {
+  formModel.value.cover = cover
+}
+
+const quickSelectAllSubscribed = () => {
+  showFeedSelector.value = true
+  nextTick(() => {
+    feedSelectorRef.value?.selectAllSubscribed?.()
+  })
+}
+
 const handleSubmit = async () => {
   try {
     formLoading.value = true
-     // 将mps_id转换为字符串
+    const list: any[] = Array.isArray(formModel.value.mps_id) ? (formModel.value.mps_id as any[]) : []
+    if (!list.length) {
+      notifyWarning('请至少选择一个订阅项')
+      return
+    }
+    if (!String(formModel.value.cover || '').trim()) {
+      formModel.value.cover = pickDefaultChannelLogo(String(formModel.value.name || ''))
+    }
+    // 将mps_id转换为字符串
     const submitData = {
       ...formModel.value,
       mps_id: JSON.stringify(formModel.value.mps_id)
@@ -99,14 +136,14 @@ const handleSubmit = async () => {
     
     if (isEdit.value) {
       await updateTag(route.params.id as string,submitData)
-      Message.success('更新成功')
+      notifySuccess('更新成功')
     } else {
       await createTag(submitData)
-      Message.success('创建成功')
+      notifySuccess('创建成功')
     }
     router.push('/manage/topics')
   } catch (error) {
-    Message.error(isEdit.value ? '更新失败' : '创建失败')
+    notifyError(isEdit.value ? '更新失败' : '创建失败')
   } finally {
     formLoading.value = false
   }
@@ -164,6 +201,21 @@ onMounted(() => {
               </div>
             </template>
           </a-upload>
+          <div class="logo-presets">
+            <div class="logo-presets-title">默认 Logo（点击套用）</div>
+            <div class="logo-presets-grid">
+              <button
+                v-for="logo in CHANNEL_LOGO_PRESETS"
+                :key="logo.id"
+                class="logo-item"
+                type="button"
+                @click="applyLogoPreset(logo.cover)"
+              >
+                <img :src="logo.cover" :alt="logo.name" />
+                <span>{{ logo.name }}</span>
+              </button>
+            </div>
+          </div>
         </a-form-item>
 
         <a-form-item label="简介" field="intro">
@@ -182,15 +234,18 @@ onMounted(() => {
           />
         </a-form-item>
 
-        <a-form-item label="公众号" field="mps_id">
+        <a-form-item label="订阅项" field="mps_id">
           <a-space>
             <a-input
-              :model-value="(formModel.mps_id||[]).map(mp => mp.id.toString()).join(',')"
-              placeholder="请选择公众号"
+              :model-value="selectedCount ? `已选 ${selectedCount} 项${selectedSummary ? `（${selectedSummary}${selectedCount > 3 ? '…' : ''}）` : ''}` : ''"
+              placeholder="请选择订阅项"
               readonly
-              style="width: 300px"
+              style="width: 420px"
             />
-            <a-button @click="showMpSelector = true">选择</a-button>
+            <a-button @click="showFeedSelector = true">选择</a-button>
+            <a-button type="outline" @click="quickSelectAllSubscribed">
+              全选已添加订阅
+            </a-button>
           </a-space>
         </a-form-item>
 
@@ -205,19 +260,19 @@ onMounted(() => {
       </a-form>
     </a-card>
   </div>
-  <!-- 公众号选择器模态框 -->
+  <!-- 订阅项选择器模态框 -->
 <a-modal
-  v-model:visible="showMpSelector"
-  title="选择公众号"
+  v-model:visible="showFeedSelector"
+  title="选择订阅项"
   :footer="false"
-  width="800px"
+  width="960px"
 >
-  <MpMultiSelect 
-    ref="mpSelectorRef"
+  <FeedMultiSelect
+    ref="feedSelectorRef"
     v-model="formModel.mps_id"
   />
   <template #footer>
-    <a-button type="primary" @click="showMpSelector = false">确定</a-button>
+    <a-button type="primary" @click="showFeedSelector = false">确定</a-button>
   </template>
 </a-modal>
 </template>
@@ -266,5 +321,40 @@ onMounted(() => {
 
 .cover-upload:hover .upload-mask {
   opacity: 1;
+}
+.logo-presets {
+  margin-top: 14px;
+}
+.logo-presets-title {
+  font-size: 12px;
+  color: var(--color-text-3);
+  margin-bottom: 8px;
+}
+.logo-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.logo-item {
+  border: 1px solid var(--color-border-2);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--color-bg-2);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.logo-item:hover {
+  border-color: rgb(var(--warning-6));
+}
+.logo-item img {
+  width: 32px;
+  height: 32px;
+}
+.logo-item span {
+  font-size: 11px;
+  color: var(--color-text-2);
 }
 </style>

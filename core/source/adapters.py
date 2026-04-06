@@ -6,8 +6,43 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from core.config import cfg
+
+
+def _make_feed_session() -> requests.Session:
+    # Reuse HTTP connections and retry transient upstream failures.
+    s = requests.Session()
+    retries = Retry(
+        total=2,
+        backoff_factor=0.35,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=frozenset(["GET", "HEAD"]),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(pool_connections=64, pool_maxsize=128, max_retries=retries)
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    return s
+
+
+_FEED_SESSION = _make_feed_session()
+
+
+def _cfg_value(path: str, default: Any) -> Any:
+    cur = getattr(cfg, "_config", None) or getattr(cfg, "config", {})
+    try:
+        for p in str(path or "").split("."):
+            if not isinstance(cur, dict) or p not in cur:
+                return default
+            cur = cur.get(p)
+        if cur is None:
+            return default
+        return cur
+    except Exception:
+        return default
 
 
 def _local(tag: str) -> str:
@@ -149,10 +184,18 @@ def fetch_feed(source_url: str, *, timeout: int = 20) -> dict[str, Any]:
     if not url:
         raise ValueError("source url is required")
 
+    try:
+        timeout = int(_cfg_value("source.fetch_timeout", timeout) or timeout)
+    except Exception:
+        timeout = int(timeout)
+    timeout = max(3, min(60, int(timeout)))
+
     headers = {
         "User-Agent": str(cfg.get("user_agent", "we-mp-rss/1.0") or "we-mp-rss/1.0"),
         "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
     }
-    resp = requests.get(url, headers=headers, timeout=float(timeout))
+    resp = _FEED_SESSION.get(url, headers=headers, timeout=float(timeout))
     resp.raise_for_status()
     return parse_feed_text(resp.text, source_url=url)

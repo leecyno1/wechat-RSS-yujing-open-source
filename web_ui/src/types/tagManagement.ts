@@ -3,6 +3,7 @@ export interface Tag {
   name: string
   cover?: string | null
   intro?: string | null
+  mps_id?: string
   status: number
   created_at: string
   updated_at: string
@@ -12,5 +13,6 @@ export interface TagCreate {
   name: string
   cover?: string | null
   intro?: string | null
+  mps_id: any[]
   status?: number
 }

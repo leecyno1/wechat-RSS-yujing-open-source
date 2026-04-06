@@ -1,9 +1,12 @@
 import json
 import re
+import hmac
+import hashlib
+import threading
 from datetime import datetime
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status as fast_status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status as fast_status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_
 
@@ -19,12 +22,19 @@ from core.models.feed import Feed
 from core.models.user import User as DBUser
 from core.models.user_bind_code import UserBindCode
 from core.models.user_message_outbox import UserMessageOutbox
+from core.models.user_subscription import UserSubscription
 from core.models.user_wechat_binding import UserWechatBinding
 from core.queue import InsightsQueue
 from core.wechat_official import WeChatOfficialClient
+from core.insights.extract import html_to_text
+from core.print import print_warning, print_info
 
 
 router = APIRouter(prefix="/service", tags=["Service API"])
+
+
+_RL_LOCK = threading.Lock()
+_RL_BUCKET: dict[tuple[str, int], int] = {}
 
 
 def _parse_api_keys(raw: str) -> set[str]:
@@ -36,7 +46,37 @@ def _parse_api_keys(raw: str) -> set[str]:
     return keys
 
 
-def require_service_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> str:
+def _api_key_fp(v: str) -> str:
+    s = str(v or "")
+    if not s:
+        return ""
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:10]
+
+
+def _rate_limited(api_key: str) -> tuple[bool, int]:
+    """返回 (是否限流, 当前分钟计数)。0 或负值配置表示关闭限流。"""
+    try:
+        limit = int(cfg.get("service.rate_limit_per_minute", 180) or 180)
+    except Exception:
+        limit = 180
+    if limit <= 0:
+        return False, 0
+    minute_key = int(datetime.utcnow().timestamp() // 60)
+    key = (str(api_key), minute_key)
+    with _RL_LOCK:
+        # 惰性清理历史分钟桶，避免字典无限增长
+        stale = [k for k in _RL_BUCKET.keys() if k[1] < minute_key - 2]
+        for k in stale:
+            _RL_BUCKET.pop(k, None)
+        cur = int(_RL_BUCKET.get(key, 0)) + 1
+        _RL_BUCKET[key] = cur
+    return cur > limit, cur
+
+
+def require_service_api_key(
+    request: Request,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> str:
     raw = str(cfg.get("service.api_keys", "") or "")
     keys = _parse_api_keys(raw)
     if not keys:
@@ -44,10 +84,28 @@ def require_service_api_key(x_api_key: Optional[str] = Header(None, alias="X-API
             status_code=fast_status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=error_response(code=50301, message="Service API is disabled (set SERVICE_API_KEYS)."),
         )
-    if not x_api_key or x_api_key not in keys:
+    ok = False
+    if x_api_key:
+        for key in keys:
+            if hmac.compare_digest(str(x_api_key), str(key)):
+                ok = True
+                break
+    if not ok:
+        print_warning(f"[service_api] invalid api key from {request.client.host if request.client else 'unknown'}")
         raise HTTPException(
             status_code=fast_status.HTTP_401_UNAUTHORIZED,
             detail=error_response(code=40111, message="Invalid X-API-Key."),
+        )
+    limited, count = _rate_limited(str(x_api_key))
+    if limited:
+        raise HTTPException(
+            status_code=fast_status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=error_response(code=42901, message="Rate limit exceeded for this API key."),
+        )
+    if bool(cfg.get("service.audit_log_enable", True)):
+        print_info(
+            f"[service_api] key={_api_key_fp(str(x_api_key))} ip={request.client.host if request.client else 'unknown'} "
+            f"path={request.url.path} method={request.method} minute_count={count}"
         )
     return x_api_key
 
@@ -166,6 +224,170 @@ async def service_list_channel_articles(
         f = session.query(Feed).filter(Feed.id == channel_id).first()
         channel = _serialize_feed(f) if f else None
     return success_response({"channel": channel, "list": items, "total": total, "page": {"limit": limit, "offset": offset, "total": total}})
+
+
+def _parse_key_points_json(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def _article_preview_text(article: Article, preview_len: int = 220) -> str:
+    desc = str(getattr(article, "description", "") or "").strip()
+    if desc:
+        return desc[:preview_len]
+    content = str(getattr(article, "content", "") or "").strip()
+    if content:
+        txt = html_to_text(content)
+        if txt:
+            return txt[:preview_len]
+    title = str(getattr(article, "title", "") or "").strip()
+    return title[:preview_len]
+
+
+@router.get("/subscriptions/articles", summary="外部Agent：读取用户已订阅源的最新文章(含预览/摘要/关键信息)")
+async def service_list_subscribed_articles(
+    user_id: str | None = Query(None, description="站内用户ID（与 wechat_openid 二选一）"),
+    wechat_openid: str | None = Query(None, description="公众号 openid（与 user_id 二选一）"),
+    scope: Literal["timeline", "per_feed_latest"] = Query("timeline", description="timeline=时间线；per_feed_latest=每个已订阅源最新一篇"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    preview_len: int = Query(220, ge=60, le=1000),
+    include_content: bool = Query(False, description="是否返回正文HTML（默认 false）"),
+    include_llm_breakdown: bool = Query(False, description="是否返回全文拆解JSON（体积较大）"),
+    _key: str = Depends(require_service_api_key),
+):
+    session = DB.get_session()
+
+    resolved_user_id = str(user_id or "").strip()
+    openid = str(wechat_openid or "").strip()
+    if not resolved_user_id and not openid:
+        raise HTTPException(
+            status_code=fast_status.HTTP_400_BAD_REQUEST,
+            detail=error_response(code=40001, message="user_id / wechat_openid 至少提供一个"),
+        )
+
+    if not resolved_user_id and openid:
+        binding = (
+            session.query(UserWechatBinding)
+            .filter(UserWechatBinding.wechat_openid == openid)
+            .filter(UserWechatBinding.is_active == 1)
+            .first()
+        )
+        if not binding:
+            raise HTTPException(
+                status_code=fast_status.HTTP_404_NOT_FOUND,
+                detail=error_response(code=40401, message="未找到 openid 对应的有效绑定"),
+            )
+        resolved_user_id = str(binding.user_id)
+
+    feed_ids = [
+        str(x[0])
+        for x in (
+            session.query(UserSubscription.feed_id)
+            .filter(UserSubscription.user_id == resolved_user_id)
+            .all()
+        )
+        if str(x[0] or "").strip()
+    ]
+    if not feed_ids:
+        return success_response(
+            {
+                "user_id": resolved_user_id,
+                "wechat_openid": openid or "",
+                "subscriptions_total": 0,
+                "scope": scope,
+                "list": [],
+                "total": 0,
+                "page": {"limit": limit, "offset": offset, "total": 0},
+            }
+        )
+
+    if scope == "per_feed_latest":
+        latest_sub = (
+            session.query(
+                Article.mp_id.label("mp_id"),
+                func.max(Article.publish_time).label("max_publish_time"),
+            )
+            .filter(Article.mp_id.in_(feed_ids))
+            .filter(Article.status != DATA_STATUS.DELETED)
+            .group_by(Article.mp_id)
+            .subquery()
+        )
+        q = (
+            session.query(Article, Feed, ArticleInsight)
+            .join(Feed, Feed.id == Article.mp_id)
+            .outerjoin(ArticleInsight, ArticleInsight.article_id == Article.id)
+            .join(
+                latest_sub,
+                and_(
+                    latest_sub.c.mp_id == Article.mp_id,
+                    latest_sub.c.max_publish_time == Article.publish_time,
+                ),
+            )
+            .order_by(Article.publish_time.desc())
+        )
+        total = q.count()
+        rows = q.limit(limit).offset(offset).all()
+    else:
+        q = (
+            session.query(Article, Feed, ArticleInsight)
+            .join(Feed, Feed.id == Article.mp_id)
+            .outerjoin(ArticleInsight, ArticleInsight.article_id == Article.id)
+            .filter(Article.mp_id.in_(feed_ids))
+            .filter(Article.status != DATA_STATUS.DELETED)
+        )
+        total = q.count()
+        rows = q.order_by(Article.publish_time.desc()).limit(limit).offset(offset).all()
+
+    items = []
+    for art, feed, ins in rows:
+        key_points = _parse_key_points_json(getattr(ins, "key_points_json", None)) if ins else None
+        llm_breakdown = None
+        if include_llm_breakdown and ins and getattr(ins, "llm_breakdown_json", None):
+            try:
+                llm_breakdown = json.loads(ins.llm_breakdown_json)
+            except Exception:
+                llm_breakdown = None
+        items.append(
+            {
+                "id": str(art.id),
+                "title": str(art.title or ""),
+                "publish_time": int(art.publish_time or 0),
+                "url": str(art.url or ""),
+                "pic_url": str(art.pic_url or ""),
+                "feed": {
+                    "id": str(feed.id),
+                    "name": str(feed.mp_name or ""),
+                    "source_platform": str(feed.source_platform or ("wechat" if (feed.faker_id or "").strip() else "rss")),
+                    "source_type": str(feed.source_type or "wechat"),
+                    "cover": str(feed.mp_cover or ""),
+                },
+                "text_preview": _article_preview_text(art, preview_len=preview_len),
+                "summary": str((getattr(ins, "summary", "") if ins else "") or ""),
+                "key_points": key_points,
+                "llm_breakdown": llm_breakdown,
+                "content": str(art.content or "") if include_content else None,
+            }
+        )
+
+    return success_response(
+        {
+            "user_id": resolved_user_id,
+            "wechat_openid": openid or "",
+            "subscriptions_total": len(feed_ids),
+            "scope": scope,
+            "list": items,
+            "total": total,
+            "page": {"limit": limit, "offset": offset, "total": total},
+        }
+    )
 
 
 @router.get("/articles/{article_id}", summary="文章详情(含洞察)")
@@ -561,7 +783,7 @@ async def service_push_latest_article(
         if not url:
             raise HTTPException(status_code=fast_status.HTTP_404_NOT_FOUND, detail=error_response(code=40402, message="最新文章缺少 url"))
 
-        text = f"【Dr.Lemon订阅助手】最新文章\n{title}\n{url}".strip()
+        text = f"【大圣之怒订阅助手】最新文章\n{title}\n{url}".strip()
 
         recipients: list[str] = []
         if openid and str(openid).strip():

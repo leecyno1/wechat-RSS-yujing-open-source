@@ -1,5 +1,30 @@
 version: '3.9'
 services:
+  rsshub-browserless:
+    image: browserless/chrome:latest
+    container_name: we-mp-rss-rsshub-browserless
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - CONCURRENT=5
+      - TIMEOUT=300000
+      - PREBOOT_CHROME=true
+
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: we-mp-rss-rsshub
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - ALLOW_ORIGIN=*
+      - TZ=Asia/Shanghai
+      - PUPPETEER_WS_ENDPOINT=ws://rsshub-browserless:3000
+    ports:
+      - "1201:1200"
+    depends_on:
+      - rsshub-browserless
+
   mysql:
     image: docker.1ms.run/mysql:8.3.0
     container_name: db-mp
@@ -33,6 +58,8 @@ services:
       - AUTO_UPDATE_CRON_AFTERNOON=0 15 * * *
       - AUTO_UPDATE_CRON_EVENING=0 21 * * *
       - AUTO_UPDATE_MAX_PAGE=1
+      - RSSHUB_INTERNAL_URL=http://rsshub:1200
+      - RSSHUB_PUBLIC_URL=http://localhost:1201
       # 可选：启用LLM全文拆解（不要把密钥写进仓库，建议通过 .env 注入）
       - SILICONFLOW_API_URL=https://api.siliconflow.cn/v1
       - SILICONFLOW_MODEL=Qwen/Qwen3-30B-A3B
@@ -41,6 +68,7 @@ services:
       - ./data:/app/data
     depends_on:
       - mysql
+      - rsshub
 
 volumes:
   db_data:

@@ -1,5 +1,30 @@
 version: '3.9'
 services:
+  rsshub-browserless:
+    image: browserless/chrome:latest
+    container_name: we-mp-rss-rsshub-browserless
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - CONCURRENT=5
+      - TIMEOUT=300000
+      - PREBOOT_CHROME=true
+
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: we-mp-rss-rsshub
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - ALLOW_ORIGIN=*
+      - TZ=Asia/Shanghai
+      - PUPPETEER_WS_ENDPOINT=ws://rsshub-browserless:3000
+    ports:
+      - "1201:1200"
+    depends_on:
+      - rsshub-browserless
+
   we-mp-rss:
     image: ghcr.io/leecyno1/wechat-rss-yujing-open-source:latest
     container_name: we-mp-rss
@@ -10,12 +35,16 @@ services:
       - DB=sqlite:///data/we_mp_rss.db
       - USERNAME=admin
       - PASSWORD=admin@123
+      - RSSHUB_INTERNAL_URL=http://rsshub:1200
+      - RSSHUB_PUBLIC_URL=http://localhost:1201
       # 可选：启用LLM全文拆解（不要把密钥写进仓库，建议通过 .env 注入）
       - SILICONFLOW_API_URL=https://api.siliconflow.cn/v1
       - SILICONFLOW_MODEL=Qwen/Qwen3-30B-A3B
       - SILICONFLOW_API_KEY=
     volumes:
       - ./data:/app/data
+    depends_on:
+      - rsshub
 
 volumes:
   db_data:

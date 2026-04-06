@@ -52,9 +52,13 @@ export const markAllReadMulti = (params: { mp_ids: string[]; kw?: string }) => {
 }
 
 export const setArticleRead = (articleId: string, isRead: boolean) => {
+  if (/https?:\/\//i.test(String(articleId || ''))) {
+    return Promise.resolve({ ok: true } as any)
+  }
   return http.put('/wx/articles/' + encodeURIComponent(articleId) + '/read', null, {
-    params: { is_read: isRead }
-  })
+    params: { is_read: isRead },
+    silentError: true
+  } as any)
 }
 
 export const getChannelArticles = (params: {
@@ -64,6 +68,7 @@ export const getChannelArticles = (params: {
   limit?: number
   offset?: number
   unread_only?: boolean
+  with_total?: boolean
 }) => {
   return http.get<{ list: any[]; total: number }>('/wx/articles', {
     params: {
@@ -72,7 +77,8 @@ export const getChannelArticles = (params: {
       search: params.search || null,
       limit: params.limit ?? 30,
       offset: params.offset ?? 0,
-      unread_only: params.unread_only ?? false
+      unread_only: params.unread_only === true,
+      with_total: params.with_total !== false
     }
   })
 }
@@ -106,7 +112,10 @@ export const backfillMp = (mpId: string, params?: { max_pages?: number; only_mis
   })
 }
 
-export const fetchArticleContent = (articleId: string, params?: { force?: boolean }) => {
+export const fetchArticleContent = (articleId: string, params?: { force?: boolean; async_mode?: boolean }) => {
+  if (/https?:\/\//i.test(String(articleId || ''))) {
+    return Promise.resolve({ ok: false, skipped: true } as any)
+  }
   return http.post<{
     ok: boolean
     fetched: boolean
@@ -115,17 +124,24 @@ export const fetchArticleContent = (articleId: string, params?: { force?: boolea
     desc_len: number
     pic_url?: string
     summary_len?: number
-  }>(`/wx/articles/${encodeURIComponent(articleId)}/content/fetch`, null, {
-    params: {
-      force: params?.force ?? false
-    }
-  })
+  }>(
+    `/wx/articles/${encodeURIComponent(articleId)}/content/fetch`,
+    null,
+    {
+      params: {
+        force: params?.force ?? false,
+        async_mode: params?.async_mode ?? false
+      },
+      silentError: true
+    } as any
+  )
 }
 
 export const getAuthedInsights = (articleId: string, params?: { include_llm?: boolean }) => {
   return http.get<any>(`/wx/insights/${encodeURIComponent(articleId)}`, {
     params: {
       include_llm: params?.include_llm ?? true
-    }
+    },
+    silentError: true
   })
 }

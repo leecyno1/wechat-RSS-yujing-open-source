@@ -95,7 +95,7 @@ docker run -d  --name we-mp-rss  -p 8001:8001 -v ./data:/app/data  docker.1ms.ru
 - `GET /api/v1/wx/library/articles/{article_id}`：文章库详情（含洞察/收藏/笔记）
 - `GET /api/v1/wx/insights/{article_id}`：获取/生成摘要与标题
 - `POST /api/v1/wx/insights/{article_id}/breakdown`：生成 LLM 全文拆解
-- `POST/DELETE /api/v1/wx/favorites/{article_id}`：收藏/取消收藏
+- `POST/DELETE /api/v1/wx/favorites/article/{article_id}`：收藏/取消收藏
 - `GET/POST/PUT/DELETE /api/v1/wx/notes`：笔记 CRUD
 - `POST /api/v1/wx/auth/session`：手动设置公众号平台会话（免扫码，需要你自行提供公众号平台 token+cookie）
 

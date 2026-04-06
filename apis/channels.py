@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as fast_status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 
 from apis.base import error_response, success_response
 from core.auth import get_current_user
@@ -123,7 +123,7 @@ async def list_channel_feeds(
         .filter(UserSubscription.user_id == user_id)
         .filter(supported_feed_filter)
     )
-    has_subs = bool(subs_q.count() or 0)
+    has_subs = subs_q.first() is not None
 
     # 兼容旧单用户数据：管理员如果尚未建立订阅映射，则默认“订阅全部”
     if not has_subs and _is_admin(current_user):
@@ -148,38 +148,33 @@ async def list_channel_feeds(
         feed_query = feed_query.filter(Feed.mp_name.ilike(f"%{kw}%"))
     total = feed_query.count()
 
-    # counts
+    # 单次聚合读取未读数/总数/最近发布时间，减少大表重复扫描
     feed_ids_subq = subs_q.subquery()
-    unread_rows = (
-        session.query(ArticleBase.mp_id, func.count(ArticleBase.id))
+    agg_rows = (
+        session.query(
+            ArticleBase.mp_id,
+            func.sum(
+                case(
+                    (func.coalesce(UserArticleState.is_read, 0) == 0, 1),
+                    else_=0,
+                )
+            ).label("unread_count"),
+            func.count(ArticleBase.id).label("article_count"),
+            func.max(ArticleBase.publish_time).label("latest_publish_time"),
+        )
         .outerjoin(
             UserArticleState,
             and_(UserArticleState.article_id == ArticleBase.id, UserArticleState.user_id == user_id),
         )
         .filter(ArticleBase.status != DATA_STATUS.DELETED)
         .filter(ArticleBase.mp_id.in_(feed_ids_subq))
-        .filter(func.coalesce(UserArticleState.is_read, 0) == 0)
-        .group_by(ArticleBase.mp_id)
-        .all()
-    )
-    total_rows = (
-        session.query(ArticleBase.mp_id, func.count(ArticleBase.id))
-        .filter(ArticleBase.status != DATA_STATUS.DELETED)
-        .filter(ArticleBase.mp_id.in_(feed_ids_subq))
-        .group_by(ArticleBase.mp_id)
-        .all()
-    )
-    latest_rows = (
-        session.query(ArticleBase.mp_id, func.max(ArticleBase.publish_time))
-        .filter(ArticleBase.status != DATA_STATUS.DELETED)
-        .filter(ArticleBase.mp_id.in_(feed_ids_subq))
         .group_by(ArticleBase.mp_id)
         .all()
     )
 
-    unread_map = {mp_id: int(cnt or 0) for mp_id, cnt in unread_rows}
-    total_map = {mp_id: int(cnt or 0) for mp_id, cnt in total_rows}
-    latest_map = {mp_id: int(ts or 0) for mp_id, ts in latest_rows}
+    unread_map = {mp_id: int(unread or 0) for mp_id, unread, _total, _latest in agg_rows}
+    total_map = {mp_id: int(total_cnt or 0) for mp_id, _unread, total_cnt, _latest in agg_rows}
+    latest_map = {mp_id: int(latest_ts or 0) for mp_id, _unread, _total, latest_ts in agg_rows}
 
     feeds = feed_query.all()
 

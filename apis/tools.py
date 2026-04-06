@@ -20,7 +20,9 @@ router = APIRouter(prefix="/tools", tags=["工具"])
 # Schema 模型定义
 class ExportArticlesRequest(BaseModel):
     """导出文章请求模型"""
-    mp_id: str = Field(..., description="公众号ID", example="MP_WXS_3892772220")
+    mp_id: str = Field("", description="公众号ID（可逗号分隔；为空表示全部订阅）", example="MP_WXS_3892772220")
+    export_scope: str = Field("selected", description="导出范围：selected/all_subscriptions")
+    export_key: Optional[str] = Field(None, description="导出记录分组键（用于导出目录）")
     doc_id: Optional[List[str]] = Field(None, description="文档ID列表，为空则导出所有文章", example=[])
     page_size: int = Field(10, description="每页数量", ge=1, le=10)
     page_count: int = Field(1, description="页数，0表示全部", ge=0, le=10000)
@@ -49,6 +51,7 @@ class ExportFileInfo(BaseModel):
 
 def _export_articles_worker(
     mp_id: str,
+    export_key: Optional[str],
     doc_id: Optional[List[int]],
     page_size: int,
     page_count: int,
@@ -67,6 +70,7 @@ def _export_articles_worker(
     """
     return export_md_to_doc(
         mp_id=mp_id,
+        export_key=export_key,
         doc_id=doc_id,
         page_size=page_size,
         page_count=page_count,
@@ -90,13 +94,24 @@ async def export_articles(
     导出文章为多种格式（使用线程池异步处理）
     """
     try:
-        # 检查是否已有相同 mp_id 的导出任务正在运行
+        scope = str(request.export_scope or "selected").strip().lower()
+        mp_scope = str(request.mp_id or "").strip()
+        if scope == "all_subscriptions":
+            mp_scope = ""
+        export_key = str(request.export_key or "").strip()
+        if not export_key:
+            export_key = "all_subscriptions" if not mp_scope else mp_scope
+
+        # 检查是否已有同一导出分组的任务正在运行
         for thread in threading.enumerate():
-            if thread.name == f"export_articles_{request.mp_id}":
-                return error_response(400, "该公众号的导出任务已在处理中，请勿重复点击")
+            if thread.name == f"export_articles_{export_key}":
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_response(40001, "该导出分组任务已在处理中，请勿重复点击"),
+                )
                 
         # 直接生成 zip_filename 并返回
-        docx_path = f"./data/docs/{request.mp_id}/"
+        docx_path = f"./data/docs/{export_key}/"
         if request.zip_filename:
             zip_file_path = f"{docx_path}{request.zip_filename}"
         else:
@@ -106,7 +121,8 @@ async def export_articles(
         export_thread = threading.Thread(
             target=_export_articles_worker,
             args=(
-                request.mp_id,
+                mp_scope,
+                export_key,
                 request.doc_id,
                 request.page_size,
                 request.page_count,
@@ -120,7 +136,7 @@ async def export_articles(
                 request.export_pdf,
                 request.zip_filename
             ),
-            name=f"export_articles_{request.mp_id}"
+            name=f"export_articles_{export_key}"
         )
         export_thread.start()
         
@@ -130,9 +146,11 @@ async def export_articles(
         })
             
     except ValueError as e:
-        return error_response(400, str(e))
+        raise HTTPException(status_code=400, detail=error_response(40001, str(e)))
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(500, f"导出失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=error_response(50000, f"导出失败: {str(e)}"))
 
 @router.get("/export/download", summary="下载导出文件")
 async def download_export_file(
@@ -161,7 +179,7 @@ async def download_export_file(
 
         # 检查是否尝试跳出基础目录
         if not safe_path.startswith(base_dir):
-            return error_response(403, "非法的文件路径请求")
+            raise HTTPException(status_code=403, detail=error_response(40301, "非法的文件路径请求"))
 
         if not os.path.exists(safe_path):
             # 避免泄露文件存在信息，或者直接报404
@@ -188,11 +206,12 @@ async def download_export_file(
     except HTTPException:
         raise
     except Exception as e:
-        return error_response(500, f"下载失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=error_response(50000, f"下载失败: {str(e)}"))
 
 @router.get("/export/list", summary="获取导出文件列表", response_model=BaseResponse)
 async def list_export_files(
     mp_id: Optional[str] = Query(None, description="公众号ID"),
+    export_key: Optional[str] = Query(None, description="导出分组键"),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -201,9 +220,8 @@ async def list_export_files(
     try:
         from .ver import API_VERSION
         safe_root = os.path.abspath(os.path.normpath("./data/docs"))
-        # Ensure mp_id is not None or empty
-       
-        export_path = os.path.abspath(os.path.join(safe_root, mp_id))
+        key = str(export_key or mp_id or "").strip() or "all_subscriptions"
+        export_path = os.path.abspath(os.path.join(safe_root, key))
         # Validate that export_path is within safe_root
         if not export_path.startswith(safe_root):
             return success_response([])
@@ -211,7 +229,7 @@ async def list_export_files(
             return success_response([])
         # Check directory permissions
         if not os.access(export_path, os.R_OK):
-            return error_response(403, "无权限访问该目录")
+            raise HTTPException(status_code=403, detail=error_response(40301, "无权限访问该目录"))
         files = []
         for root, _, filenames in os.walk(export_path):
             # Ensure root is also within safe_root, in case of symlinks or traversal
@@ -230,7 +248,7 @@ async def list_export_files(
                         "created_time": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
                         "modified_time": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
                         "path": file_path,
-                        "download_url": f"{API_VERSION}/tools/export/download?mp_id={mp_id}&filename={file_path}"  # 下载链接
+                        "download_url": f"{API_VERSION}/tools/export/download?mp_id={key}&filename={file_path}"  # 下载链接
                     })
                     except PermissionError:
                         continue
@@ -241,8 +259,10 @@ async def list_export_files(
         
         return success_response(files)
         
+    except HTTPException:
+        raise
     except Exception as e:
-        return error_response(500, f"获取文件列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=error_response(50000, f"获取文件列表失败: {str(e)}"))
 
 # 删除文件请求模型
 class DeleteFileRequest(BaseModel):
@@ -261,7 +281,7 @@ async def delete_export_file(
     try:
         # 参数验证
         if not request.filename :
-            return error_response(400, "文件名和公众号ID不能为空")
+            raise HTTPException(status_code=400, detail=error_response(40001, "文件名和公众号ID不能为空"))
         
         # 构建文件路径并做路径归一化及安全检测
         base_path = os.path.realpath(f"./data/docs/{request.mp_id}/")
@@ -270,15 +290,15 @@ async def delete_export_file(
         
         # 安全检查：确保文件在指定目录内，防止路径遍历攻击
         if not safe_path.startswith(base_path):
-            return error_response(403, "无权限删除该文件")
+            raise HTTPException(status_code=403, detail=error_response(40301, "无权限删除该文件"))
         
         # 只允许删除.zip文件
         if not request.filename.endswith('.zip'):
-            return error_response(400, "只能删除.zip格式的导出文件")
+            raise HTTPException(status_code=400, detail=error_response(40001, "只能删除.zip格式的导出文件"))
         
         # 检查文件是否存在
         if not os.path.exists(safe_path):
-            return error_response(404, "文件不存在")
+            raise HTTPException(status_code=404, detail=error_response(40401, "文件不存在"))
         
         # 删除文件
         os.remove(safe_path)
@@ -289,11 +309,13 @@ async def delete_export_file(
         })
         
     except PermissionError:
-        return error_response(403, "没有权限删除该文件")
+        raise HTTPException(status_code=403, detail=error_response(40301, "没有权限删除该文件"))
+    except HTTPException:
+        raise
     except ValueError as e:
-        return error_response(422, f"请求参数验证失败: {str(e)}")
+        raise HTTPException(status_code=422, detail=error_response(42201, f"请求参数验证失败: {str(e)}"))
     except Exception as e:
-        return error_response(500, f"删除文件失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=error_response(50000, f"删除文件失败: {str(e)}"))
 
 # 兼容性接口：支持查询参数方式删除
 @router.delete("/export/delete-by-query", summary="删除导出文件(查询参数)", response_model=BaseResponse)

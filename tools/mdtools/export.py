@@ -141,12 +141,31 @@ def process_articles(session, mp_id=None,doc_id=None, page_size=10, page_count=1
     
     return record_count
 
-def export_md_to_doc(mp_id:str=None,doc_id:list=None,page_size:int=10,page_count:int=1,add_title=True,remove_images:bool=True,remove_links:bool=False
-                     ,export_md:bool=False,export_docx:bool=False,export_json:bool=False,export_csv:bool=False,export_pdf:bool=True,domain="",zip_filename=None,zip_file=True):
+def export_md_to_doc(
+    mp_id: str = None,
+    doc_id: list = None,
+    page_size: int = 10,
+    page_count: int = 1,
+    add_title=True,
+    remove_images: bool = True,
+    remove_links: bool = False,
+    export_md: bool = False,
+    export_docx: bool = False,
+    export_json: bool = False,
+    export_csv: bool = False,
+    export_pdf: bool = True,
+    domain="",
+    zip_filename=None,
+    zip_file=True,
+    export_key: str | None = None,
+):
     session = DB.get_session()
-    if mp_id==None:
-        raise ValueError("公众号ID不能为空")
-    docx_path = f"./data/docs/{mp_id}/"
+    from core.common.file_tools import sanitize_filename
+
+    scope_mp_id = str(mp_id or "").strip()
+    dir_key = str(export_key or "").strip() or (scope_mp_id if scope_mp_id else "all_subscriptions")
+    dir_key = sanitize_filename(dir_key) or "all_subscriptions"
+    docx_path = f"./data/docs/{dir_key}/"
     if not os.path.exists(docx_path):
         os.makedirs(docx_path)
     csv_filename = f"{docx_path}articles.csv"
@@ -162,7 +181,7 @@ def export_md_to_doc(mp_id:str=None,doc_id:list=None,page_size:int=10,page_count
     # 调用独立的文章处理函数
     record_count = process_articles(
         session=session,
-        mp_id=mp_id,
+        mp_id=scope_mp_id if scope_mp_id else None,
         doc_id=doc_id,
         page_size=page_size,
         page_count=page_count,

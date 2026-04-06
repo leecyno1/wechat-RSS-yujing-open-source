@@ -394,7 +394,7 @@ const fetchArticles = async () => {
     pagination.value.total = res.total || 0
   } catch (error) {
     console.error('获取文章列表错误:', error)
-    Message.error(error)
+    Message.error((error as any)?.message || '获取文章列表失败')
   } finally {
     loading.value = false
   }
@@ -591,7 +591,7 @@ const viewArticle = async (record: any,action_type: number = 0) => {
     }
   } catch (error) {
     console.error('获取文章详情错误:', error)
-    Message.error(error)
+    Message.error((error as any)?.message || '获取文章详情失败')
   } finally {
     loading.value = false
   }
@@ -686,7 +686,7 @@ const fetchMpList = async () => {
       mpList.value.unshift({
         id: '',
         name: '全部',
-        avatar: '/static/logo.svg',
+        avatar: '/static/logo-original.png',
         mp_intro: '显示所有公众号文章',
         article_count: res.total || 0
       });

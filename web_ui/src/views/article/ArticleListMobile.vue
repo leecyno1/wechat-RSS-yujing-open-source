@@ -98,7 +98,7 @@
 
   <a-drawer id="article-modal"
     v-model:visible="articleModalVisible" 
-    title="Dr.Lemon订阅助手"
+    title="大圣之怒订阅助手"
     placement="left"
     width="100vw"
     :footer="false"
@@ -201,7 +201,7 @@ const fetchArticles = async (isLoadMore = false) => {
     }
   } catch (error) {
     console.error('获取文章列表错误:', error)
-    Message.error(error)
+    Message.error((error as any)?.message || '获取文章列表失败')
   } finally {
     loading.value = false
   }
@@ -241,7 +241,7 @@ const viewArticle = async (record: any,action_type: number) => {
     }
   } catch (error) {
     console.error('获取文章详情错误:', error)
-    Message.error(error)
+    Message.error((error as any)?.message || '获取文章详情失败')
   } finally {
     loading.value = false
   }

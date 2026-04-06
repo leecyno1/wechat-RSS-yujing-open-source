@@ -219,7 +219,7 @@ class DigestService:
         max_chars = int(cfg.get("digest.max_chars", 1800) or 1800)
         max_chars = max(200, min(8000, max_chars))
 
-        header = f"【Dr.Lemon订阅助手】{date_str} {slot}精选"
+        header = f"【大圣之怒订阅助手】{date_str} {slot}精选"
         if window_label:
             header = f"{header}\n{window_label}"
 
